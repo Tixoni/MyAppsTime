@@ -78,7 +78,7 @@ export default {
     // Whether the editor dialog is shown (v-model:open)
     open: { type: Boolean, default: false },
   },
-  emits: ['save', 'delete', 'close', 'update:open'],
+  emits: ['save', 'delete', 'saved', 'deleted', 'close', 'update:open'],
   data() {
     return {
       editedEvent: null,
@@ -96,6 +96,7 @@ export default {
         return moment(this.editedEvent.timestamp).format('YYYY-MM-DDTHH:mm:ss');
       },
       set: function (dt) {
+        if (!dt) return; // a cleared datetime-local input gives ''
         // Duration needs to be set first since otherwise the computed for end will use the new timestamp
         this.editedEvent.duration = moment(this.end).diff(dt, 'seconds');
         this.editedEvent.timestamp = new Date(dt);
@@ -107,6 +108,7 @@ export default {
         return end.format('YYYY-MM-DDTHH:mm:ss');
       },
       set: function (dt) {
+        if (!dt) return;
         this.editedEvent.duration = moment(dt).diff(this.editedEvent.timestamp, 'seconds');
       },
     },

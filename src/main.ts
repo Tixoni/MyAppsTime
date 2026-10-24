@@ -27,8 +27,6 @@ import router from './route';
 // Sets up the pinia store
 import pinia from './stores';
 
-// NOTE: vue-datetime is Vue 2 only — removed (TODO: find Vue 3 alternative)
-
 // Font Awesome (replaces vue-awesome which was Vue 2 only)
 import '@fortawesome/fontawesome-svg-core/styles.css';
 import { config } from '@fortawesome/fontawesome-svg-core';

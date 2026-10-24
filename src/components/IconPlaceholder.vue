@@ -1,5 +1,5 @@
 <template>
-  <font-awesome-icon v-if="faIcon" :icon="faIcon" :style="iconStyle" class="me-1" />
+  <font-awesome-icon v-if="faIcon" :icon="faIcon" :style="iconStyle" class="fa-icon" />
   <span v-else class="icon-placeholder" :data-icon="name"></span>
 </template>
 

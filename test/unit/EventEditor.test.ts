@@ -113,6 +113,18 @@ describe('EventEditor save', () => {
     expect(wrapper.vm.busy).toBe(false);
   });
 
+  test('clearing a date input leaves the event time unchanged', async () => {
+    const { wrapper } = mountEditor();
+    await flush();
+    const { timestamp, duration } = wrapper.vm.editedEvent;
+
+    wrapper.vm.start = '';
+    wrapper.vm.end = '';
+
+    expect(wrapper.vm.editedEvent.timestamp).toBe(timestamp);
+    expect(wrapper.vm.editedEvent.duration).toBe(duration);
+  });
+
   test('emits the submitted snapshot even if the editable event changes during Save', async () => {
     const inFlight = deferred();
     const { wrapper, $aw } = mountEditor({
