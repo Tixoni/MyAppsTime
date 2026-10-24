@@ -1,0 +1,213 @@
+<template lang="pug">
+div
+  h3 {{ $t('nav.graph') }}
+
+  b-alert(:model-value="true" variant="warning")
+    | {{ $t('ui.graph.earlyDev') }}
+
+  p {{ $t('ui.graph.description') }}
+
+  b-alert(v-if="error" :model-value="true" variant="danger")
+    | {{error}}
+
+  // Specify max category depth
+  b-form-group(:label="$t('ui.graph.maxDepth')")
+    b-form-input(v-model="maxDepth" type="number" min="1")
+
+  // Toggle to exclude uncategorized
+  b-form-group(:label="$t('ui.graph.excludeUncategorized')")
+    b-form-checkbox(v-model="excludeUncategorized")
+
+  div.d-flex
+    span.me-auto
+    b-button(type="button", @click="generate()" variant="success")
+      icon(name="search")
+      | {{ $t('report.generate') }}
+
+  div.d-flex.mt-1
+    span.me-auto.small.text-muted {{ $t('ui.search.hostname') }}: {{queryOptions.hostname}}
+    b-button.border-0(size="sm", variant="outline-dark" @click="show_options = !show_options")
+      span(v-if="!show_options")
+        | #[icon(name="angle-double-down")] {{ $t('ui.search.showOptions') }}
+      span(v-else)
+        | #[icon(name="angle-double-up")] {{ $t('ui.search.hideOptions') }}
+
+  div(v-show="show_options")
+    h4 {{ $t('report.options') }}
+    aw-query-options(v-model="queryOptions")
+
+  div(v-if="status == 'searching'")
+    div #[icon(name="spinner" pulse)] {{ $t('ui.search.searching') }}
+
+
+  div(v-if="events != null")
+    hr
+
+    div
+        | {{ $t('report.foundEvents', { count: events.length, seconds: queryTime / 1000 }) }}
+
+    aw-force-graph(:data="graphdata")
+
+    hr
+
+    div
+      | {{ $t('search.notFound') }}
+      br
+      | {{ $t('search.addWeek') }} #[b-button(size="sm" variant="outline-dark" @click="extendByWeek()") {{ $t('search.addWeekBtn') }}]
+</template>
+
+<style scoped lang="scss"></style>
+
+<script lang="ts">
+import { defineAsyncComponent } from 'vue';
+import _ from 'lodash';
+import moment from 'moment';
+
+import { canonicalEvents, querystr_to_array } from '~/queries';
+import { useBucketsStore } from '~/stores/buckets';
+
+import { useCategoryStore } from '~/stores/categories';
+
+import { getClient } from '~/util/awclient';
+
+export default {
+  name: 'Graph',
+  components: {
+    'aw-force-graph': defineAsyncComponent(() => import('~/visualizations/ForceGraph.vue')),
+  },
+  data() {
+    return {
+      categoryStore: useCategoryStore(),
+
+      events: null,
+      graphdata: {},
+
+      status: null,
+      queryTime: null,
+      error: '',
+
+      // Parameters
+      maxDepth: 3,
+      excludeUncategorized: false,
+
+      // Options
+      show_options: false,
+      queryOptions: {},
+    };
+  },
+  mounted: async function () {
+    await this.categoryStore.load();
+  },
+  methods: {
+    generate: async function () {
+      this.events = await this.fetchEvents();
+      this.graphdata = this.generateGraphData(this.events);
+    },
+    fetchEvents: async function () {
+      // TODO: use full query (one per day/timeperiod) instead of canonicalEvents
+      let query = canonicalEvents({
+        ...useBucketsStore().desktopBucketIds(this.queryOptions.hostname),
+        filter_afk: this.queryOptions.filter_afk,
+        categories: this.categoryStore.classes_for_query,
+        filter_categories: this.excludeUncategorized
+          ? this.categoryStore.classes_for_query.map(t => t[0])
+          : null,
+      });
+      query += '; RETURN = events;';
+
+      const query_array = querystr_to_array(query);
+      const start = moment(this.queryOptions.start).format();
+      const end = moment(this.queryOptions.stop).format();
+      const timeperiods = [start + '/' + end];
+      try {
+        this.status = 'searching';
+        const time = moment();
+        const data = await getClient().query(timeperiods, query_array);
+        this.error = '';
+        this.queryTime = moment().diff(time);
+        console.log('done fetching events!');
+        this.events = _.orderBy(data[0], ['timestamp'], ['desc']);
+      } catch (e) {
+        console.error(e);
+        this.error = e?.response?.data?.message || e?.message || this.$t('common.requestFailed');
+      } finally {
+        this.status = null;
+      }
+      return this.events;
+    },
+    generateGraphData: function (events) {
+      // generate graph data from events
+      // iterate through events, and count the number of category transitions
+      // for each category, add a node to the graphdata with the group of its parent category
+      // for each transition-pair, add a link to the graphdata with the number of transitions as weight
+      const SEP = '>';
+
+      // copy all events, slice off category depth deeper than maxDepth
+      events = events.map(e => {
+        const $category = e.data.$category.slice(0, this.maxDepth);
+        return { ...e, data: { ...e.data, $category } };
+      });
+
+      const allCategories: Set<string> = new Set(
+        events.map(e => e.data.$category).map(c => c.join(SEP))
+      );
+      const groups = { Uncategorized: 0 };
+
+      // Generate groups
+      for (const category of allCategories) {
+        const rootcat = category.split(SEP)[0];
+        if (!Object.prototype.hasOwnProperty.call(groups, rootcat)) {
+          groups[rootcat] = Object.keys(groups).length;
+        }
+      }
+
+      // Generate nodes
+      const nodes = [];
+      for (const category of allCategories) {
+        const rootcat = category.split(SEP)[0];
+        // Size nodes depending on time spent
+        const catTime = events
+          .filter(e => e.data.$category.join(SEP) == category)
+          .map(e => moment(e.timestamp).add(e.duration).diff(e.timestamp))
+          .reduce((a, b) => a + b, 0);
+        nodes.push({
+          id: category,
+          group: groups[rootcat],
+          color: this.categoryStore.get_category_color(category.split(SEP)),
+          value: catTime,
+        });
+      }
+
+      // Generate links
+      const links = [];
+      for (let i = 0; i < events.length - 1; i++) {
+        const e1 = events[i];
+        const e2 = events[i + 1];
+        const e1cat = e1.data.$category;
+        const e2cat = e2.data.$category;
+        if (_.isEqual(e1cat, e2cat)) continue;
+
+        const link = links.find(l => l.source == e1cat.join(SEP) && l.target == e2cat.join(SEP));
+        if (link) {
+          link.value++;
+        } else {
+          links.push({
+            source: e1cat.join(SEP),
+            target: e2cat.join(SEP),
+            value: 1,
+          });
+        }
+      }
+
+      console.log('generated nodes & links');
+      return { nodes, links };
+    },
+    extendByWeek() {
+      this.queryOptions.start = moment(this.queryOptions.start)
+        .subtract(1, 'week')
+        .format('YYYY-MM-DD');
+      this.generate();
+    },
+  },
+};
+</script>

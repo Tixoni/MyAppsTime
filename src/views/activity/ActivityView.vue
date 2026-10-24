@@ -1,0 +1,203 @@
+<template lang="pug">
+div(v-if="viewMissing")
+  b-alert.mt-3(:model-value="true" variant="warning")
+    | {{ $t('ui.activity.missingView', { view: view_id }) }}
+    |
+    router-link(:to="{ name: 'activity-view', params: {...$route.params, view_id: 'default'} }")
+      | {{ $t('ui.activity.goDefault') }}
+    | .
+div(v-else-if="view")
+  // TODO: Handle large/variable sized visualizations better
+  //- Key on the view id as well as the position, so that switching views
+    rebuilds the visualizations instead of reusing the instance that sat at
+    the same index in the previous view (which kept its stale local state).
+  draggable.row(v-model="elements" handle=".handle" :item-key="visKey")
+    template(#item="{ element: el, index }")
+      div.col-md-6.col-lg-4.p-3(:class="{'col-md-12': isVisLarge(el), 'col-lg-12': isVisLarge(el)}")
+        aw-selectable-vis(:id="index" :type="el.type" :props="el.props" :view-id="view.id" @onTypeChange="onTypeChange" @onRemove="onRemove" :editable="editing")
+
+    template(#footer)
+      div.col-md-6.col-lg-4.p-3(v-if="editing")
+        b-button.w-100(@click="addVisualization" variant="outline-dark" size="lg")
+          icon(name="plus")
+          span {{ $t('activityView.addVisualization') }}
+
+  div(v-if="editing").mt-2
+    div.d-flex.flex-row-reverse
+      b-button(variant="outline-dark" @click="discard(); editing = !editing;")
+        icon(name="times")
+        span {{ $t('activityView.cancel') }}
+      b-button.me-2(variant="success" @click="save(); editing = !editing;")
+        icon(name="save")
+        span {{ $t('activityView.save') }}
+    div.mt-2.d-flex.flex-row-reverse
+      b-button(variant="warning" size="sm" @click="restoreDefaults();")
+        icon(name="undo")
+        span {{ $t('activityView.restoreDefaults') }}
+      b-button.me-2(variant="danger" size="sm" @click="showRemoveModal = true")
+        icon(name="trash")
+        span {{ $t('activityView.remove') }}
+  div(v-else).d-flex.flex-row-reverse.mt-2
+    b-button(variant="outline-dark" size="sm" @click="editing = !editing")
+      icon(name="edit")
+      span {{ $t('activityView.editView') }}
+
+  b-modal(
+    v-if="view"
+    v-model="showRemoveModal"
+    :title="$t('activityView.removeViewTitle')"
+    centered
+    :ok-title="$t('activityView.removeViewOk')"
+    ok-variant="danger"
+    cancel-variant="outline-secondary"
+    @ok="remove"
+  )
+    | {{ $t('activityView.removeViewConfirm') }} "{{ view.name || view.id }}"?
+    br
+    br
+    | {{ $t('activityView.removeViewHint') }} #[b {{ $t('activityView.restoreDefaults') }}] {{ $t('activityView.removeViewRestoreHint') }}
+
+  b-modal(
+    v-model="showCustomVisModal"
+    :title="$t('ui.activity.addCustomVisualization')"
+    :ok-title="$t('ui.activity.add')"
+    @ok="onCustomVisConfirm"
+  )
+    b-form-group(:label="$t('ui.activity.watcherName')")
+      b-form-input(
+        v-model="customVisWatcherName"
+        placeholder="aw-watcher-"
+      )
+    b-form-group(:label="$t('ui.activity.visualizationTitle')")
+      b-form-input(
+        v-model="customVisTitle"
+        :placeholder="$t('ui.activity.myVisualization')"
+      )
+</template>
+
+<script lang="ts">
+import { toRaw } from 'vue';
+import draggable from 'vuedraggable';
+
+import { useViewsStore } from '~/stores/views';
+
+// Identity for view elements, which have no id of their own
+const elementIds = new WeakMap<object, number>();
+let nextElementId = 0;
+function elementId(el: object): number {
+  const raw = toRaw(el);
+  if (!elementIds.has(raw)) elementIds.set(raw, nextElementId++);
+  return elementIds.get(raw);
+}
+
+export default {
+  name: 'ActivityView',
+  components: {
+    draggable: draggable,
+  },
+  props: {
+    view_id: { type: String, default: 'default' },
+  },
+  data() {
+    return {
+      editing: false,
+      showCustomVisModal: false,
+      showRemoveModal: false,
+      customVisWatcherName: 'aw-watcher-',
+      customVisTitle: '',
+      pendingCustomVisId: null as number | null,
+    };
+  },
+  computed: {
+    views: function () {
+      return useViewsStore().viewsForHost(this.$route.params.host || '');
+    },
+    view: function () {
+      if (this.view_id == 'default') {
+        return this.views[0];
+      } else {
+        return this.views.find(v => v.id == this.view_id);
+      }
+    },
+    viewMissing: function (): boolean {
+      // True only once views have loaded but the requested id doesn't exist.
+      // Without this guard, navigating to a stale URL (e.g. /view/category)
+      // silently rendered the default view's content under the wrong tab.
+      return this.views.length > 0 && this.view_id !== 'default' && !this.view;
+    },
+    elements: {
+      get() {
+        return this.view.elements;
+      },
+      set(elements) {
+        useViewsStore().setElements({ view_id: this.view.id, elements });
+      },
+    },
+  },
+  methods: {
+    save() {
+      useViewsStore().save();
+    },
+    discard() {
+      useViewsStore().load();
+    },
+    remove() {
+      useViewsStore().removeView({ view_id: this.view.id });
+      // If we're on an URL that'll be invalid after removing the view, navigate to the main/default view
+      if (!this.$route.path.includes('default')) {
+        this.$router.replace('./default');
+      }
+    },
+    restoreDefaults() {
+      useViewsStore().restoreDefaults();
+      alert(this.$t('activityView.restoreAlert'));
+      // If we're on an URL that might become invalid, navigate to the main/default view
+      if (!this.$route.path.includes('default')) {
+        this.$router.replace('./default');
+      }
+    },
+    addVisualization: function () {
+      useViewsStore().addVisualization({ view_id: this.view.id, type: 'top_apps' });
+    },
+    async onTypeChange(id, type) {
+      if (type === 'custom_vis') {
+        // Show modal to collect watcher name and visualization title
+        this.pendingCustomVisId = id;
+        this.customVisWatcherName = 'aw-watcher-';
+        this.customVisTitle = '';
+        this.showCustomVisModal = true;
+        return;
+      }
+
+      await useViewsStore().editView({ view_id: this.view.id, el_id: id, type, props: {} });
+    },
+    async onCustomVisConfirm(event) {
+      if (!this.customVisWatcherName.trim() || !this.customVisTitle.trim()) {
+        event.preventDefault();
+        return;
+      }
+      const props = {
+        visname: this.customVisWatcherName,
+        title: this.customVisTitle,
+      };
+      await useViewsStore().editView({
+        view_id: this.view.id,
+        el_id: this.pendingCustomVisId,
+        type: 'custom_vis',
+        props,
+      });
+    },
+    async onRemove(id) {
+      await useViewsStore().removeVisualization({ view_id: this.view.id, el_id: id });
+    },
+    visKey(el) {
+      // A stable per-element id, so reordering (dragging) keeps each
+      // visualization's instance, while switching views rebuilds them.
+      return this.view.id + '-' + elementId(el);
+    },
+    isVisLarge(el) {
+      return el.type == 'sunburst_clock' || el.type == 'vis_timeline';
+    },
+  },
+};
+</script>

@@ -1,0 +1,182 @@
+import moment, { Moment, Duration } from 'moment';
+import { useSettingsStore } from '~/stores/settings';
+import { i18n } from '~/i18n';
+
+function getStartOfDayOffset() {
+  const settingsStore = useSettingsStore();
+  return settingsStore.startOfDay;
+}
+
+function normalize_date(dateParam: Date) {
+  return new Date(dateParam.getTime());
+}
+
+export function seconds_to_duration(seconds: number) {
+  // Returns a human-readable duration string
+  const hrs = Math.floor(seconds / 60 / 60);
+  const min = Math.floor((seconds / 60) % 60);
+  const sec = Math.floor(seconds % 60);
+  const hourUnit = String(i18n.global.t('common.durationHours'));
+  const minuteUnit = String(i18n.global.t('common.durationMinutes'));
+  const secondUnit = String(i18n.global.t('common.durationSeconds'));
+  const l = [];
+
+  if (hrs > 0) {
+    l.push(hrs + hourUnit);
+    l.push(min + minuteUnit);
+  } else if (min > 0) {
+    l.push(min + minuteUnit);
+  }
+  l.push(sec + secondUnit);
+
+  return l.join(' ');
+}
+
+export function friendlydate(timestamp: string | Moment) {
+  const now = moment();
+  const m = moment.parseZone(timestamp);
+  const sinceNow = moment.duration(m.diff(now));
+  if (-sinceNow.asSeconds() <= 60) {
+    return `${Math.round(-sinceNow.asSeconds())}s ago`;
+  } else if (-sinceNow.asSeconds() <= 60 * 60 * 24) {
+    return sinceNow.humanize(true);
+  }
+  return sinceNow.humanize(true);
+}
+
+// Narrow, localized labels on desktop; unit-only ages where table space is tight.
+export function compact_relative_time(
+  timestamp: string,
+  locale: string,
+  unitOnly = false,
+  now = new Date()
+) {
+  const seconds = (new Date(timestamp).getTime() - now.getTime()) / 1000;
+  const units: [Intl.RelativeTimeFormatUnit, string, number][] = [
+    ['year', 'y', 365 * 86400],
+    ['month', 'mo', 30 * 86400],
+    ['day', 'd', 86400],
+    ['hour', 'h', 3600],
+    ['minute', 'min', 60],
+    ['second', 's', 1],
+  ];
+  const [unit, label, divisor] = units.find(([, , size]) => Math.abs(seconds) >= size) || units[5];
+  const value = Math.trunc(seconds / divisor);
+  if (unitOnly) {
+    return `${value > 0 ? '+' : ''}${Math.abs(value)}${label}`;
+  }
+  if (locale.split('-')[0] === 'en') {
+    const age = `${Math.abs(value)}${label}`;
+    return value > 0 ? `in ${age}` : `${age} ago`;
+  }
+  return new Intl.RelativeTimeFormat(locale, { numeric: 'always', style: 'narrow' }).format(
+    value === 0 ? -0 : value,
+    unit
+  );
+}
+
+export function get_day_start_with_offset(dateParam: Moment | string, offset?: string) {
+  if (!offset) {
+    offset = getStartOfDayOffset();
+  }
+  const dateMoment = dateParam ? moment(dateParam) : moment().startOf('day');
+  const start_of_day_hours = parseInt(offset.split(':')[0]);
+  const start_of_day_minutes = parseInt(offset.split(':')[1]);
+  // Zero seconds/ms too: callers pass "now"-derived Moments, and a boundary that
+  // inherits the refresh instant's seconds shifts every report day by up to 59 s.
+  return dateMoment
+    .hour(start_of_day_hours)
+    .minute(start_of_day_minutes)
+    .second(0)
+    .millisecond(0)
+    .format();
+}
+
+// Return the startOfDay offset as a number of hours
+export function get_hour_offset(offset?: string): number {
+  if (!offset) {
+    offset = getStartOfDayOffset();
+  }
+  const start_of_day_hours = parseInt(offset.split(':')[0]);
+  const start_of_day_minutes = parseInt(offset.split(':')[1]);
+  return start_of_day_hours + start_of_day_minutes / 60;
+}
+
+export function get_day_end_with_offset(date: Moment | string, offset?: string): string {
+  if (!offset) {
+    offset = getStartOfDayOffset();
+  }
+  return moment(get_day_start_with_offset(date, offset)).add(1, 'days').format();
+}
+
+export function get_day_period(date: Moment | string, offset?: string): string {
+  if (!offset) {
+    offset = getStartOfDayOffset();
+  }
+  return get_day_start_with_offset(date, offset) + '/' + get_day_end_with_offset(date, offset);
+}
+
+export function get_prev_day(datestr: string): Moment {
+  return moment(datestr).add(-1, 'days');
+}
+
+export function get_next_day(datestr: string): Moment {
+  return moment(datestr).add(1, 'days');
+}
+
+export function get_offset_duration(offset?: string): Duration {
+  if (!offset) {
+    offset = getStartOfDayOffset();
+  }
+  const [hours, minutes] = offset.split(':');
+  return moment.duration({ hours: Number(hours), minutes: Number(minutes) });
+}
+
+export function get_today_with_offset(offset?: string): string {
+  if (!offset) {
+    offset = getStartOfDayOffset();
+  }
+  // Gets "today" in an offset-aware way
+  const offset_dur = get_offset_duration(offset);
+  return moment().subtract(offset_dur).startOf('day').format('YYYY-MM-DD');
+}
+
+export function format_weekday_short(dateParam: Date, locale?: string | string[]) {
+  return new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(normalize_date(dateParam));
+}
+
+export function format_day_of_month(dateParam: Date, locale?: string | string[]) {
+  return new Intl.DateTimeFormat(locale, { day: 'numeric' }).format(normalize_date(dateParam));
+}
+
+export function get_short_month_labels(locale?: string | string[]) {
+  return Array.from({ length: 12 }, (_, month) =>
+    new Intl.DateTimeFormat(locale, { month: 'short' }).format(new Date(2020, month, 1, 12))
+  );
+}
+
+// Format a date as locale-aware short date (e.g. "Jun 15" in en-US, "15 jun" in sv-SE)
+export function format_date_short(date: Date | string, locale?: string | string[]) {
+  const d = date instanceof Date ? date : new Date(date);
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(d);
+}
+
+// Format a date with weekday prefix (e.g. "Mon, Jun 15" in en-US, "mån 15 jun" in sv-SE)
+export function format_date_with_weekday(date: Date | string, locale?: string | string[]) {
+  const d = date instanceof Date ? date : new Date(date);
+  return new Intl.DateTimeFormat(locale, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(d);
+}
+
+// Format a time-of-day string locale-aware (e.g. "14:30:05" or "2:30:05 PM" per browser locale)
+export function format_time_of_day(date: Date | string, locale?: string | string[]) {
+  const d = date instanceof Date ? date : new Date(date);
+  return new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(d);
+}

@@ -1,0 +1,101 @@
+import { createRouter, createWebHashHistory } from 'vue-router';
+
+const Home = () => import('./views/Home.vue');
+
+// Activity views for desktop
+const Activity = () => import('./views/activity/Activity.vue');
+const ActivityView = () => import('./views/activity/ActivityView.vue');
+
+const Buckets = () => import('./views/Buckets.vue');
+const Bucket = () => import('./views/Bucket.vue');
+const QueryExplorer = () => import('./views/QueryExplorer.vue');
+const Timeline = () => import('./views/Timeline.vue');
+const Trends = () => import('./views/Trends.vue');
+const Settings = () => import('./views/settings/Settings.vue');
+const CategoryBuilder = () => import('./views/settings/CategoryBuilder.vue');
+const Stopwatch = () => import('./views/Stopwatch.vue');
+const WorkReport = () => import('./views/WorkReport.vue');
+const BillingView = () => import('./views/BillingView.vue');
+const AISummaryView = () => import('./views/AISummaryView.vue');
+const Alerts = () => import('./views/Alerts.vue');
+const Search = () => import('./views/Search.vue');
+const Report = () => import('./views/Report.vue');
+const TimespiralView = () => import('./views/TimespiralView.vue');
+const Dev = () => import('./views/Dev.vue');
+const Graph = () => import('./views/Graph.vue');
+const NotFound = () => import('./views/NotFound.vue');
+
+// Like `props: true`, but leaves out absent optional params: vue-router 4 passes
+// those as '' rather than undefined, which would override the prop defaults.
+function paramsAsProps(route) {
+  return Object.fromEntries(Object.entries(route.params).filter(([, v]) => v !== ''));
+}
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes: [
+    {
+      path: '/',
+      redirect: _to => {
+        return localStorage.landingpage || '/home';
+      },
+    },
+    { path: '/home', component: Home },
+    {
+      path: '/activity/:host/:periodLength?/:date?',
+      component: Activity,
+      props: paramsAsProps,
+      children: [
+        {
+          path: 'view/:view_id?',
+          meta: { subview: 'view' },
+          name: 'activity-view',
+          component: ActivityView,
+          props: paramsAsProps,
+        },
+        // Unspecified should redirect to summary view is the summary view
+        // (needs to be last since otherwise it'll always match first)
+        {
+          path: '',
+          // vue-router 4 doesn't resolve relative redirect strings like 'view/'
+          redirect: to => ({ name: 'activity-view', params: to.params, query: to.query }),
+        },
+      ],
+    },
+    { path: '/buckets', component: Buckets },
+    { path: '/buckets/:id', component: Bucket, props: true },
+    { path: '/timeline', component: Timeline, meta: { fullContainer: true } },
+    { path: '/trends', component: Trends, meta: { fullContainer: true } },
+    { path: '/trends/:host', component: Trends, meta: { fullContainer: true } },
+    { path: '/report', component: Report },
+    { path: '/query', component: QueryExplorer },
+    { path: '/alerts', component: Alerts },
+    { path: '/timespiral', component: TimespiralView },
+    { path: '/settings', component: Settings },
+    { path: '/category-builder', component: CategoryBuilder },
+    // Keep old URL working for bookmarks / external links.
+    { path: '/settings/category-builder', redirect: '/category-builder' },
+    // :group lets the active settings panel survive reloads / be linkable.
+    // The matcher excludes 'category-builder' so the more specific route above
+    // wins; new groups added in Settings.vue should also be added here.
+    {
+      path: '/settings/:group(general|appearance|categorization|privacy|developer|notifications)',
+      component: Settings,
+      props: true,
+    },
+    { path: '/stopwatch', component: Stopwatch },
+    { path: '/work-report', component: WorkReport },
+    { path: '/billing', component: BillingView },
+    { path: '/analysis/activity', component: AISummaryView },
+    { path: '/search', component: Search },
+    { path: '/graph', component: Graph },
+    { path: '/dev', component: Dev },
+    // Vue Router 4: catch-all uses :pathMatch(.*)*
+    {
+      path: '/:pathMatch(.*)*',
+      component: NotFound,
+    },
+  ],
+});
+
+export default router;

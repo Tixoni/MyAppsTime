@@ -1,0 +1,481 @@
+<template lang="pug">
+div
+  h3 {{ $t('buckets.title') }}
+
+  b-card.bucket-card.mb-3(
+    v-for="device in bucketsStore.bucketsByDevice",
+    :key="device.hostname || device.device_id",
+    :class="{'bucket-card--unknown': device.hostname === 'unknown'}"
+  )
+    div.d-flex.justify-content-between.align-items-start.mb-2
+      div.d-flex.align-items-center
+        icon.me-2.text-muted(v-if="device.hostname === 'unknown'" name="question" scale="1.2")
+        icon.me-2.text-secondary(v-else-if="bucketsStore.available(device.hostname).android" name="mobile" scale="1.2")
+        icon.me-2.text-secondary(v-else name="desktop" scale="1.2")
+        div
+          span.fw-bold {{ device.hostname }}
+          b-badge.ms-2(v-if="serverStore.info && serverStore.info.hostname == device.hostname" variant="info") {{ $t('buckets.thisDevice') }}
+          div.small.text-muted(v-if="device.device_id && device.hostname !== device.device_id")
+            | {{ $t('ui.buckets.id') }}: {{ device.device_id }}
+          div.small(v-if="deviceHasEvents(device)")
+            span.text-muted {{ $t('buckets.lastUpdatedInline') }}&nbsp;
+            time(:class="{'text-success': isRecent(device.last_updated)}",
+                 :datetime="device.last_updated",
+                 :title="device.last_updated")
+              | {{ friendlytime(device.last_updated) }}
+          div.small.text-muted(v-else)
+            | {{ $t('buckets.noEventsYet') }}
+      b-dropdown.kebab-dropdown(
+        size="sm",
+        variant="outline-secondary",
+        toggle-class="border-0",
+        no-caret,
+        end,
+        boundary="window",
+        :title="$t('buckets.moreActionsFor', { hostname: device.hostname })",
+        :aria-label="$t('buckets.moreActionsFor', { hostname: device.hostname })"
+      )
+        template(v-slot:button-content)
+          icon(name="ellipsis-v")
+        b-dropdown-item-button(
+          @click="openDeleteHostModal(device)",
+          button-class="text-danger",
+          :title="$t('buckets.deleteAllTitle', { count: device.buckets.length, hostname: device.hostname })"
+        )
+          icon.me-1(name="trash")
+          | {{ $t('buckets.deleteAllForHost') }}
+
+    //- A list rather than a table: the name opens the bucket, the timestamp
+    //- takes only the width it needs, and per-bucket actions live in the kebab.
+    ul.list-unstyled.mb-0.bucket-list
+      li.bucket-row(v-for="bucket in sortedBuckets(device)", :key="bucket.id")
+        router-link.bucket-link(:to="'/buckets/' + bucket.id", :title="$t('buckets.openBucket') + ': ' + bucket.id")
+          small.font-monospace.bucket-id {{ bucket.id }}
+          time.small.bucket-updated(v-if="bucketHasEvents(bucket)",
+                                   :class="{'text-success': isRecent(bucket.last_updated)}",
+                                   :datetime="bucket.last_updated",
+                                   :title="bucket.last_updated")
+            span.d-md-none {{ compactRelativeTime(bucket.last_updated, true) }}
+            span.d-none.d-md-inline {{ compactRelativeTime(bucket.last_updated) }}
+          small.text-muted.bucket-updated(v-else) {{ $t('buckets.noEvents') }}
+        b-dropdown.kebab-dropdown(variant="outline-secondary", toggle-class="border-0", size="sm", end, no-caret, boundary="window", :title="$t('common.more')")
+          template(v-slot:button-content)
+            icon(name="ellipsis-v")
+          b-dropdown-item(@click="export_bucket_json(bucket.id)", :title="$t('buckets.exportBucketJson')")
+            icon.me-1(name="download")
+            | {{ $t('buckets.exportBucketJson') }}
+          b-dropdown-item(@click="export_csv(bucket.id)", :title="$t('buckets.exportEventsCsv')")
+            icon.me-1(name="download")
+            | {{ $t('buckets.exportEventsCsv') }}
+          b-dropdown-divider
+          b-dropdown-item-button(@click="openDeleteBucketModal(bucket.id)", :title="$t('buckets.deleteBucket')", button-class="text-danger")
+            icon.me-1(name="trash")
+            | {{ $t('buckets.deleteBucket') }}
+
+    div(v-for="msg in runChecks(device)" :key="msg")
+      b-alert.mt-2.mb-0.py-1.px-2.small(:model-value="true" variant="warning")
+        icon(name="exclamation-triangle")
+        | &nbsp;
+        | {{ msg }}
+
+  b-modal(v-model="showDeleteModal", :title="$t('buckets.deleteBucketTitle')", centered, hide-footer)
+    | {{ $t('buckets.deleteConfirm', { id: delete_bucket_selected }) }}
+    br
+    br
+    b {{ $t('buckets.deletePermanent') }}
+    hr
+    div.float-end
+      b-button.mx-2(@click="showDeleteModal = false")
+        | {{ $t('common.cancel') }}
+      b-button(@click="deleteBucket(delete_bucket_selected)", variant="danger")
+        | {{ $t('common.confirm') }}
+
+  b-modal(v-model="showDeleteHostModal", :title="deleteHostModalTitle", centered, hide-footer, @hidden="delete_host_selected = null; delete_host_error = null")
+    template(v-if="delete_host_selected")
+      | {{ $t('buckets.deleteHostConfirmPrefix') }}
+      |
+      b {{ $t('buckets.deleteHostConfirmCount', { count: delete_host_selected.bucketCount }) }}
+      |
+      | {{ $t('buckets.deleteHostConfirmSuffix', { hostname: delete_host_selected.hostname }) }}
+      br
+      br
+      b {{ $t('buckets.deletePermanent') }}
+      div.small.text-muted.mt-2(style="max-height: 200px; overflow-y: auto;")
+        | {{ $t('buckets.bucketsToDelete') }}
+        ul.mb-0
+          li(v-for="bucketId in delete_host_selected.bucketIds", :key="bucketId")
+            code {{ bucketId }}
+      b-alert.mt-2(v-if="delete_host_error" :model-value="true" variant="danger")
+        | {{ delete_host_error }}
+      hr
+      div.float-end
+        b-button.mx-2(@click="showDeleteHostModal = false")
+          | {{ $t('common.cancel') }}
+        b-button(@click="deleteBucketsForSelectedHost()",
+                 :disabled="deleting_host",
+                 variant="danger")
+          template(v-if="deleting_host")
+            | {{ $t('buckets.deleting') }}
+          template(v-else)
+            | {{ $t('common.confirm') }}
+
+  h4.mt-4 {{ $t('buckets.importExportTitle') }}
+
+  b-card-group.deck
+    b-card(:header="$t('buckets.importBuckets')")
+      b-alert(v-if="import_success" :model-value="true" variant="success" dismissible @close="import_success = false")
+        | {{ $t('buckets.importSuccess') }}
+      b-alert(v-if="import_error" :model-value="true" variant="danger" dismissible @close="import_error = null")
+        | {{ import_error }}
+      b-form-file(v-model="import_file"
+                  :placeholder="$t('buckets.importPlaceholder')"
+                  :drop-placeholder="$t('buckets.importDrop')")
+      div.mt-2(v-if="import_file")
+        b-spinner.me-2(small)
+        small.text-muted {{ $t('buckets.importing') }}
+      small.d-block.mt-2.text-muted
+        | {{ $t('buckets.importHelpNew') }}
+    b-card(:header="$t('buckets.exportBuckets')")
+      p.small.text-muted {{ $t('buckets.exportHelp') }}
+      b-button(@click="export_all_buckets_json()",
+               :title="$t('buckets.exportAllJson')",
+               :disabled="exporting",
+               variant="outline-secondary")
+        b-spinner.me-1(v-if="exporting", small)
+        icon.me-1(v-else, name="download")
+        | {{ exporting ? $t('buckets.exporting') : $t('buckets.exportAllJson') }}
+      b-alert.mt-2(v-if="export_error", variant="danger", :model-value="true", dismissible, @close="export_error = null")
+        | {{ export_error }}
+
+  hr
+
+  b-alert(variant="info" :model-value="true")
+    | {{ $t('buckets.moreWatchers') }} #[a(href="https://docs.activitywatch.net/en/latest/watchers.html") {{ $t('buckets.docsLink') }}].
+
+  aw-devonly(:reason="$t('ui.devOnly.bucketTools')")
+    h4.p-2 {{ $t('buckets.tools') }}
+
+    hr
+
+    aw-bucket-validate.p-2
+
+    hr
+
+    aw-bucket-merge.p-2
+</template>
+
+<style lang="scss">
+.bucket-card {
+  .card-header,
+  .card-footer {
+    padding: 0.5em 0.75em 0.5em 0.75em;
+  }
+
+  .card-body {
+    padding: 0.5em;
+  }
+}
+</style>
+
+<style scoped lang="scss">
+.bucket-card {
+  margin-bottom: 1em;
+}
+
+// No `opacity` here: opacity < 1 makes the card a stacking context, which
+// traps its dropdown menus underneath the cards below it.
+.bucket-card--unknown {
+  background: #fbfbfb;
+}
+
+.bucket-row {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid #dee2e6;
+}
+
+.bucket-row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.bucket-link {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  min-width: 0;
+  padding: 0.4rem 0.3rem;
+  color: inherit;
+}
+
+.bucket-link:hover {
+  text-decoration: none;
+}
+
+.bucket-link:hover .bucket-id {
+  text-decoration: underline;
+}
+
+.bucket-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bucket-updated {
+  flex: none;
+  margin-left: 0.75rem;
+  white-space: nowrap;
+}
+
+::v-deep .kebab-dropdown > .btn {
+  color: #6c757d;
+  background: transparent;
+}
+
+::v-deep .kebab-dropdown > .btn:hover,
+::v-deep .kebab-dropdown > .btn:focus,
+::v-deep .kebab-dropdown.show > .btn {
+  background: #f0f1f3;
+  color: #212529;
+}
+
+.bucket-last-updated {
+  color: #666;
+}
+</style>
+
+<script lang="ts">
+import { defineAsyncComponent } from 'vue';
+import _ from 'lodash';
+import moment from 'moment';
+
+import { useServerStore } from '~/stores/server';
+import { useBucketsStore } from '~/stores/buckets';
+import { getStoredApiToken } from '~/util/awclient';
+import { androidExportFromUrl, downloadBlob } from '~/util/export';
+import { compact_relative_time } from '~/util/time';
+
+// NOTE: keep this out of the component's `methods`. The global
+// `asyncErrorCapturedMixin` wraps every async method so that its rejection is
+// reported to the global `ErrorBoundary` and the *returned* promise resolves.
+// A wrapped `importBuckets` would therefore never reject inside the
+// `import_file` watcher below, and a failed import would still set
+// `import_success = true` (showing a success alert next to the error).
+async function importBuckets(aw, importFile) {
+  const formData = new FormData();
+  formData.append('buckets.json', importFile);
+  const headers = { 'Content-Type': 'multipart/form-data' };
+  return aw.req.post('/0/import', formData, { headers });
+}
+
+export default {
+  name: 'Buckets',
+  components: {
+    'aw-bucket-merge': defineAsyncComponent(() => import('~/components/BucketMerge.vue')),
+    'aw-bucket-validate': defineAsyncComponent(() => import('~/components/BucketValidate.vue')),
+  },
+  data() {
+    return {
+      showDeleteModal: false,
+      showDeleteHostModal: false,
+      moment,
+      bucketsStore: useBucketsStore(),
+      serverStore: useServerStore(),
+
+      import_file: null,
+      import_error: null,
+      import_success: false,
+      delete_bucket_selected: null,
+      delete_host_selected: null,
+      deleting_host: false,
+      delete_host_error: null,
+      export_inflight: 0,
+      export_error: null as string | null,
+    };
+  },
+  computed: {
+    exporting() {
+      return this.export_inflight > 0;
+    },
+    deleteHostModalTitle() {
+      if (this.delete_host_selected) {
+        return this.$t('buckets.deleteHostTitleNamed', {
+          hostname: this.delete_host_selected.hostname,
+        });
+      }
+      return this.$t('buckets.deleteHostTitle');
+    },
+  },
+  watch: {
+    import_file: async function (_new_value, _old_value) {
+      if (this.import_file != null) {
+        // Clear the previous outcome up-front so a stale success/error alert
+        // isn't shown beside the spinner while the new import is in flight.
+        this.import_success = false;
+        this.import_error = null;
+        try {
+          await importBuckets(this.$aw, this.import_file);
+          this.import_error = null;
+          this.import_success = true;
+        } catch (err) {
+          const serverMessage = err?.response?.data?.message;
+          this.import_error = serverMessage || this.$t('buckets.importFailedGeneric');
+          this.import_success = false;
+        }
+        await this.bucketsStore.loadBuckets();
+        this.import_file = null;
+      }
+    },
+  },
+  mounted: async function () {
+    await this.bucketsStore.loadBuckets();
+  },
+  methods: {
+    sortedBuckets: function (device) {
+      return [...device.buckets].sort((a, b) => a.id.localeCompare(b.id));
+    },
+    compactRelativeTime: function (timestamp: string, unitOnly = false) {
+      return compact_relative_time(timestamp, this.$i18n.locale, unitOnly);
+    },
+    isRecent: function (date) {
+      return moment().diff(date) / 1000 < 120;
+    },
+    bucketHasEvents: function (bucket) {
+      return Boolean(bucket && bucket.last_updated);
+    },
+    deviceHasEvents: function (device) {
+      return _.some(device.buckets, b => this.bucketHasEvents(b));
+    },
+    runChecks: function (device) {
+      const checks = [
+        {
+          msg: () => {
+            return `Device known by several hostnames: ${device.hostnames}`;
+          },
+          failed: () => device.hostnames.length > 1,
+        },
+        {
+          msg: () => {
+            return `Device known by several IDs: ${device.device_ids}`;
+          },
+          failed: () => device.device_ids.length > 1,
+        },
+        {
+          msg: () => {
+            return `Device is a special device, unattributed to a hostname, or not assigned a device ID.`;
+          },
+          failed: () => _.isEqual(device.hostnames, ['unknown']),
+        },
+      ];
+      const failedChecks = _.filter(checks, c => c.failed());
+      return _.map(failedChecks, c => c.msg());
+    },
+    openDeleteBucketModal: function (bucketId: string) {
+      this.delete_bucket_selected = bucketId;
+      this.showDeleteModal = true;
+    },
+    deleteBucket: async function (bucketId: string) {
+      await this.bucketsStore.deleteBucket({ bucketId });
+      this.showDeleteModal = false;
+    },
+    openDeleteHostModal: function (device) {
+      this.delete_host_selected = {
+        hostname: device.hostname,
+        bucketCount: device.buckets.length,
+        bucketIds: device.buckets.map(b => b.id),
+      };
+      this.showDeleteHostModal = true;
+    },
+    deleteBucketsForSelectedHost: async function () {
+      if (!this.delete_host_selected) return;
+      this.deleting_host = true;
+      this.delete_host_error = null;
+      try {
+        await this.bucketsStore.deleteBucketsByHost({
+          bucketIds: this.delete_host_selected.bucketIds,
+        });
+        this.showDeleteHostModal = false;
+      } catch (err) {
+        this.delete_host_error = err?.message || this.$t('buckets.deleteFailed');
+      } finally {
+        this.deleting_host = false;
+      }
+    },
+
+    async export_bucket_json(bucketId: string) {
+      await this.export_json(`/0/buckets/${bucketId}/export`, `aw-bucket-export-${bucketId}.json`);
+    },
+
+    async export_all_buckets_json() {
+      await this.export_json('/0/export', 'aw-buckets-export.json');
+    },
+
+    async export_json(path: string, filename: string) {
+      const url = `${this.$aw.req.defaults.baseURL || ''}${path}`;
+      if (androidExportFromUrl(url, filename)) {
+        return;
+      }
+      this.export_inflight += 1;
+      this.export_error = null;
+      try {
+        // Keep the axios client so Authorization: Bearer is sent. blob
+        // skips JSON.parse/pretty-print. A 5-minute timeout beats the 30s
+        // default without leaving the spinner stuck if the server stalls.
+        const response = await this.$aw.req.get(path, {
+          timeout: 300_000,
+          responseType: 'blob',
+        });
+        await downloadBlob(filename, response.data, 'application/json');
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.export_error = this.$t('buckets.exportFailed', { error: msg });
+        console.error('JSON export failed:', e);
+      } finally {
+        this.export_inflight = Math.max(0, this.export_inflight - 1);
+      }
+    },
+
+    async export_csv(bucketId: string) {
+      const filename = `aw-events-export-${bucketId}.csv`;
+      const path = `/0/buckets/${encodeURIComponent(bucketId)}/export/csv`;
+      const url = `${this.$aw.req.defaults.baseURL || ''}${path}`;
+      // Android WebView: native URL download so the CSV never enters JS memory.
+      if (androidExportFromUrl(url, filename)) {
+        return;
+      }
+      this.export_inflight += 1;
+      this.export_error = null;
+      try {
+        // Default local installs have no API token. Let the browser stream the
+        // download from the server endpoint so 200 OK lands immediately and
+        // the CSV never enters JS memory. Tauri cannot use <a download>, and
+        // token-authenticated deployments need Authorization: Bearer, so those
+        // still go through the blob client.
+        if (!('__TAURI__' in window) && !getStoredApiToken()) {
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          return;
+        }
+        const response = await this.$aw.req.get(path, {
+          timeout: 300_000,
+          responseType: 'blob',
+        });
+        await downloadBlob(filename, response.data, 'text/csv');
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.export_error = this.$t('buckets.exportFailed', { error: msg });
+        console.error('CSV export failed:', e);
+      } finally {
+        this.export_inflight = Math.max(0, this.export_inflight - 1);
+      }
+    },
+  },
+};
+</script>

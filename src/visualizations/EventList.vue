@@ -1,0 +1,187 @@
+<template lang="pug">
+div
+  // TODO: Make event-editor a global component backed by a Vuex store
+  //       Currently, more than one event-editor on the same view can lead to multiple event-editors opening.
+  event-editor(
+    v-if="editable"
+    v-model:open="editorOpen"
+    :event="editableEvent", :bucket_id="bucket_id",
+    @save="(e) => $emit('save', e)", @delete="removeEvent"
+  )
+  b-card.event-container(no-block=true)
+    template(#header)
+      h4.card-title {{ $t('ui.eventList.title') }}
+      span.pagination-header
+        | {{ $t('ui.eventList.showing', { shown: displayed_events.length, total: events.length }) }}
+      b-button(@click="expandList", size="sm", style="float: right;")
+        span(v-if="!isListExpanded")
+          | {{ $t('ui.eventList.expand') }}
+        span(v-else)
+          | {{ $t('ui.eventList.condense') }}
+
+    ul.event-list(:class="{ 'expand': isListExpanded }")
+      li(v-for="event in displayed_events")
+          span.event
+            span.field(:title="event.timestamp")
+              icon(name="calendar")
+              | {{ friendlytime(event.timestamp) }}
+            span.field
+              icon(name="clock")
+              | {{ friendlyduration(event.duration) }}
+            span(v-for="(val, key) in event.data").field
+              icon(name="tags")
+              // TODO: Add some kind of highlighting to key
+              | {{ key }}: {{ val }}
+            span(v-if="editable")
+              b-button.field(@click="() => {editEvent(event)}" variant="outline-dark" size="sm" style="padding: 0 0.2em 0 0.2em")
+                icon(name="edit")
+                | {{ $t('ui.eventList.edit') }}
+</template>
+
+<style scoped lang="scss">
+$border-color: #ddd;
+
+.card {
+  margin-bottom: 1em;
+
+  .card-title {
+    display: inline-block;
+    margin-bottom: 0;
+    margin-right: 1em;
+  }
+
+  .card-body {
+    padding: 0;
+  }
+}
+
+.event-list {
+  list-style-type: none;
+  padding: 0;
+  border-radius: 3px;
+  height: 25em;
+  overflow-y: auto;
+  white-space: nowrap;
+  margin-bottom: 0px;
+
+  li {
+    border: 0 solid $border-color;
+    border-width: 0 0 1px 0;
+    border-radius: 4px;
+    padding: 2px;
+
+    &:last-child {
+      border-width: 0;
+    }
+  }
+
+  &.expand {
+    height: 100%;
+  }
+}
+
+.event {
+  display: inline-block;
+  padding: 0.3em;
+  clear: both;
+}
+
+.pagination-header {
+  font-size: 12pt;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.field {
+  margin: 0 5px 0 0;
+  font-size: 11pt;
+  padding: 3px 5px 3px 5px;
+  background-color: #ddd;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+
+  &:last-child {
+    margin-right: 0;
+  }
+}
+
+// On phones a single nowrap row pushes the event data (titles, URLs, ...)
+// off-screen, so let the fields wrap within the list instead.
+@media (max-width: 575.98px) {
+  .event-list {
+    white-space: normal;
+  }
+
+  .event {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .field {
+    margin: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Flips the outer element once, then all direct children once,
+   leaving the scrollbar in the first flipped yet the content correct */
+.scrollbar-flipped,
+.scrollbar-flipped > * {
+  transform: rotateX(180deg);
+  -ms-transform: rotateX(180deg); /* IE 9 */
+  -webkit-transform: rotateX(180deg); /* Safari and Chrome */
+}
+</style>
+
+<script lang="ts">
+import EventEditor from '~/components/EventEditor.vue';
+import { friendlytime, friendlyduration } from '~/util/filters';
+
+export default {
+  name: 'EventList',
+  components: {
+    'event-editor': EventEditor,
+  },
+  props: {
+    bucket_id: String,
+    events: Array,
+    editable: {
+      default: false,
+      type: Boolean,
+    },
+  },
+  data: function () {
+    return {
+      editorOpen: false,
+      isListExpanded: false,
+      limit: 100,
+      editableEvent: null,
+    };
+  },
+  computed: {
+    displayed_events: function () {
+      return this.events.slice(0, this.limit);
+    },
+  },
+  methods: {
+    friendlytime,
+    friendlyduration,
+    editEvent: function (event) {
+      this.editableEvent = event;
+      this.$nextTick(() => {
+        this.editorOpen = true;
+      });
+    },
+    expandList: function () {
+      this.isListExpanded = !this.isListExpanded;
+      console.log('List should be expanding: ', this.isListExpanded);
+    },
+    removeEvent: function (_event) {
+      // FIXME: Illegal mutation of prop, need to propagate upwards or move into vuex.
+      //this.events = this.events.filter(e => e.id != event.id);
+    },
+  },
+};
+</script>

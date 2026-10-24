@@ -1,0 +1,63 @@
+import router from '~/route';
+
+const routes: readonly any[] = router.options.routes;
+
+describe('router', () => {
+  test('root redirect uses localStorage landingpage when set', () => {
+    const rootRoute = routes.find(route => route.path === '/');
+
+    localStorage.landingpage = '/work-report';
+    expect(rootRoute.redirect({})).toBe('/work-report');
+  });
+
+  test('root redirect falls back to /home when localStorage landingpage is missing', () => {
+    const rootRoute = routes.find(route => route.path === '/');
+
+    delete localStorage.landingpage;
+    expect(rootRoute.redirect({})).toBe('/home');
+  });
+
+  test('opens Category Builder as a standalone page and redirects its legacy URL', async () => {
+    const builderRoute = router.options.routes.find(route => route.path === '/category-builder');
+
+    expect(builderRoute).toBeTruthy();
+    expect(typeof (builderRoute as any).component).toBe('function');
+    // resolve() doesn't follow redirects in Vue Router 4; navigating does.
+    await router.push('/settings/category-builder');
+    expect(router.currentRoute.value.path).toBe('/category-builder');
+    expect(router.resolve('/settings/categorization').path).toBe('/settings/categorization');
+  });
+
+  test('includes the work report route', () => {
+    const workReportRoute = routes.find(route => route.path === '/work-report');
+
+    expect(workReportRoute).toBeTruthy();
+    expect(typeof workReportRoute.component).toBe('function');
+  });
+});
+
+describe('activity route host param', () => {
+  test.each([
+    ['/activity/erb-m2.localdomain/day/2026-09-26', 'erb-m2.localdomain'],
+    ['/activity/@all/day/2026-09-26', '@all'],
+    ['/activity/host1,host2/week/2026-09-21', 'host1,host2'],
+    ['/activity/my%20host/day', 'my host'],
+    // list items are encoded twice so a ',' inside a hostname survives
+    ['/activity/self,a%252Cb/day', 'self,a%2Cb'],
+  ])('%s resolves to the activity view with host %s', (path, host) => {
+    const resolved = router.resolve(path + '/view/');
+    expect(resolved.name).toBe('activity-view');
+    expect(resolved.params.host).toBe(host);
+  });
+});
+
+describe('activity route default view', () => {
+  test.each(['/activity/host1', '/activity/host1/day/2026-09-26'])(
+    '%s redirects to the activity view',
+    async path => {
+      await router.push(path);
+      expect(router.currentRoute.value.name).toBe('activity-view');
+      expect(router.currentRoute.value.params.host).toBe('host1');
+    }
+  );
+});

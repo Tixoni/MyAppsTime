@@ -1,0 +1,167 @@
+<template lang="pug">
+div
+  h3 {{ $t('search.title') }}
+
+  b-alert(v-if="error" :model-value="true" variant="danger")
+    | {{error}}
+
+  b-input-group(size="lg")
+    b-form-input(v-model="pattern" v-on:keyup.enter="search()" :placeholder="$t('ui.search.regexPlaceholder')")
+    b-button(type="button", @click="search()" variant="success")
+      icon.me-1(name="search")
+      | {{ $t('search.searchBtn') }}
+
+  div.d-flex.mt-1
+    span.me-auto.small.text-muted {{ $t('ui.search.hostname') }}: {{queryOptions.hostname}}
+    b-button.border-0(size="sm", variant="outline-dark" @click="show_options = !show_options")
+      span(v-if="!show_options")
+        | #[icon(name="angle-double-down")] {{ $t('ui.search.showOptions') }}
+      span(v-else)
+        | #[icon(name="angle-double-up")] {{ $t('ui.search.hideOptions') }}
+
+  div(v-show="show_options")
+    h4 {{ $t('search.options') }}
+    aw-query-options(v-model="queryOptions")
+
+  div(v-if="status == 'searching'")
+    div #[icon(name="spinner" pulse)] {{ $t('ui.search.searching') }}
+
+  div(v-if="events != null || browserEvents != null")
+    hr
+
+    div(v-if="events && events.length > 0")
+      h5 {{ $t('extraViews.search.windowEvents') }} ({{ events.length }})
+      aw-selectable-eventview(:events="events")
+
+    div(v-if="browserEvents && browserEvents.length > 0")
+      h5 {{ $t('extraViews.search.browserEvents') }} ({{ browserEvents.length }})
+      table.table.table-sm.table-hover
+        thead
+          tr
+            th {{ $t('extraViews.search.timestamp') }}
+            th {{ $t('extraViews.search.duration') }}
+            th URL
+            th {{ $t('extraViews.search.title') }}
+        tbody
+          tr(v-for="e in browserEvents" :key="e.id || e.timestamp")
+            td {{ shortdate(e.timestamp) }} {{ shorttime(e.timestamp) }}
+            td {{ friendlyduration(e.duration) }}
+            td
+              a(:href="e.data.url" target="_blank" rel="noopener") {{ e.data.url }}
+            td {{ e.data.title }}
+
+    div(v-if="status !== 'searching' && events && events.length === 0 && (!browserEvents || browserEvents.length === 0)")
+      p.text-muted {{ $t('extraViews.search.noResults') }}
+
+    div
+      | {{ $t('search.notFound') }}
+      br
+      | {{ $t('search.addWeek') }} #[b-button(size="sm" variant="outline-dark" @click="extendByWeek()") {{ $t('search.addWeekBtn') }}]
+</template>
+
+<script lang="ts">
+import _ from 'lodash';
+import moment from 'moment';
+import { canonicalEvents, browserSearchQuery, querystr_to_array } from '~/queries';
+import { useBucketsStore } from '~/stores/buckets';
+
+export default {
+  name: 'Search',
+  data() {
+    return {
+      pattern: '',
+      events: null,
+      browserEvents: null,
+
+      status: null,
+      error: '',
+
+      // Options
+      show_options: false,
+      queryOptions: {
+        start: moment().subtract(1, 'day').format('YYYY-MM-DD'),
+        stop: moment().add(1, 'day').format('YYYY-MM-DD'),
+      },
+    };
+  },
+  methods: {
+    search: async function () {
+      const timeperiods = [
+        moment(this.queryOptions.start).format() + '/' + moment(this.queryOptions.stop).format(),
+      ];
+
+      // Window search query
+      let windowQuery = canonicalEvents({
+        ...useBucketsStore().desktopBucketIds(this.queryOptions.hostname),
+        filter_afk: this.queryOptions.filter_afk,
+        categories: [[['searched'], { type: 'regex', regex: this.pattern, ignore_case: true }]],
+        filter_categories: [['searched']],
+      });
+      windowQuery += '; RETURN = events;';
+      const windowQueryArray = querystr_to_array(windowQuery);
+
+      try {
+        this.status = 'searching';
+        this.error = '';
+
+        // Look up browser buckets for this host. A failure here (e.g. the bucket
+        // list cannot be loaded) must not block the window-only search.
+        let browserQueryArray: string[] = [];
+        try {
+          const bucketsStore = useBucketsStore();
+          await bucketsStore.ensureLoaded();
+          const browserBuckets = bucketsStore.bucketsBrowser(this.queryOptions.hostname);
+          browserQueryArray = browserSearchQuery(browserBuckets, this.pattern);
+        } catch (e) {
+          console.error('Failed to load browser buckets for search', e);
+        }
+
+        // Each source can fail independently (e.g. a browser-only host has no
+        // window/AFK buckets). Keep successful matches and report partial failures.
+        const errors: string[] = [];
+        const results = await Promise.all([
+          this.$aw.query(timeperiods, windowQueryArray).catch(e => {
+            console.error('Window search failed', e);
+            errors.push(`Window search: ${e.response?.data?.message ?? String(e)}`);
+            return null;
+          }),
+          browserQueryArray.length > 0
+            ? this.$aw.query(timeperiods, browserQueryArray).catch(e => {
+                console.error('Browser search failed', e);
+                errors.push(`Browser search: ${e.response?.data?.message ?? String(e)}`);
+                return null;
+              })
+            : Promise.resolve(null),
+        ]);
+        this.error = errors.join('; ');
+
+        // Every window hit carries the synthetic `searched` category the query
+        // uses for filtering; it is not a real category, so drop it from results.
+        const windowResults = results[0] ? results[0][0] : [];
+        const windowEvents = windowResults.map(e => ({ ...e, data: _.omit(e.data, '$category') }));
+        this.events = _.orderBy(windowEvents, ['timestamp'], ['desc']);
+        const browserResults = results[1] ? results[1][0] : [];
+        // An event can match the pattern in both its url and title, which the
+        // query concatenates into two entries; dedup by event ID so each
+        // database record appears at most once.
+        this.browserEvents = _.orderBy(
+          _.uniqBy(browserResults, (e: any) => e.id),
+          ['timestamp'],
+          ['desc']
+        );
+      } catch (e) {
+        console.error(e);
+        this.error = e.response?.data?.message ?? String(e);
+      } finally {
+        this.status = null;
+      }
+    },
+    extendByWeek() {
+      this.queryOptions.start = moment(this.queryOptions.start)
+        .subtract(1, 'week')
+        .format('YYYY-MM-DD');
+      this.search();
+    },
+  },
+};
+</script>

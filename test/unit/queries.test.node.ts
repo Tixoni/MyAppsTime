@@ -1,0 +1,773 @@
+/**
+ * Tests for browser app name regex patterns in queries.ts.
+ *
+ * The patterns in browser_appname_regex replaced exhaustive exact-match lists that were
+ * previously hardcoded in browser_appnames. Every app name that was in the old lists is
+ * tested here as a regression guard. If a real-world app name is discovered that doesn't
+ * match, add it to the relevant test below AND update the regex pattern in queries.ts.
+ *
+ * Historical exact-match lists (pre-regex):
+ *
+ *   Chrome:   'Google Chrome', 'Google-chrome', 'Chrome.exe', 'chrome.exe',
+ *             'google-chrome-stable', 'Chromium', 'Chromium-browser', 'chromium-browser',
+ *             'Chromium-browser-chromium', 'Chromium.exe', 'chromium.exe',
+ *             'Google-chrome-beta', 'Google-chrome-unstable'
+ *             (Flatpak app IDs retained as exact: 'com.google.Chrome', 'com.google.ChromeDev',
+ *              'org.chromium.Chromium')
+ *             Chromium forks that report through the chrome extension bucket (#927):
+ *             'Arc', 'arc.exe', 'Arc.exe', 'Dia', 'Dia.exe'
+ *             (macOS bundle ID retained as exact: 'company.thebrowser.dia')
+ *             Helium running the Chrome Web Store extension build (#898):
+ *             'Helium', 'helium.exe'
+ *             Ungoogled Chromium, which also runs the Chrome Web Store extension
+ *             build but whose process name does not start with 'chromium':
+ *             'ungoogled-chromium', 'ungoogled_chromium', 'Ungoogled Chromium',
+ *             'ungoogled-chromium-bin'
+ *
+ *   Firefox:  'Firefox', 'Firefox.exe', 'firefox', 'firefox.exe',
+ *             'Firefox Developer Edition', 'firefoxdeveloperedition',
+ *             'Firefox-esr', 'Firefox Beta', 'Nightly', 'firefox-aurora', 'firefox-trunk-dev',
+ *             'LibreWolf-Portable.exe', 'LibreWolf', 'LibreWolf.exe', 'Librewolf', 'Librewolf.exe',
+ *             'librewolf', 'librewolf.exe', 'librewolf-default',
+ *             'Waterfox', 'Waterfox.exe', 'waterfox', 'waterfox.exe'
+ *             (Flatpak app IDs retained as exact: 'org.mozilla.firefox',
+ *              'io.gitlab.librewolf-community', 'net.waterfox.waterfox')
+ *
+ *   Opera:    'opera.exe', 'Opera.exe', 'Opera'
+ *             (Flatpak app ID retained: 'com.opera.Opera')
+ *
+ *   Brave:    'Brave-browser', 'brave-browser', 'Brave Browser', 'brave.exe', 'Brave.exe'
+ *             (Flatpak app ID retained: 'com.brave.Browser')
+ *
+ *   Edge:     'msedge.exe', 'Microsoft Edge', 'Microsoft Edge Beta',
+ *             'Microsoft-Edge-Stable', 'Microsoft-edge', 'microsoft-edge',
+ *             'microsoft-edge-beta', 'microsoft-edge-dev'
+ *             (Flatpak app IDs retained: 'com.microsoft.Edge', 'com.microsoft.EdgeDev')
+ *
+ *   Arc:      'arc.exe', 'Arc.exe', 'Arc'
+ *             (also matched by the chrome pattern, since Arc reports to the chrome bucket
+ *              unless the browser name is overridden in the extension settings)
+ *
+ *   Vivaldi:  'Vivaldi-stable', 'Vivaldi-snapshot', 'vivaldi.exe', 'Vivaldi.exe', 'Vivaldi'
+ *             (Flatpak app ID retained: 'com.vivaldi.Vivaldi')
+ *
+ *   Orion:    'Orion'
+ *
+ *   Yandex:   'Yandex'
+ *             (Flatpak app ID retained: 'ru.yandex.Browser')
+ *
+ *   Zen:      'Zen', 'Zen Browser', 'Zen-browser', 'zen', 'zen browser', 'zen-browser',
+ *             'zen.exe', 'Zen.exe'
+ *             (Flatpak app ID retained: 'app.zen_browser.zen')
+ *
+ *   Floorp:   'Floorp', 'floorp.exe', 'Floorp.exe', 'floorp'
+ *             (Flatpak app ID retained: 'one.ablaze.floorp')
+ */
+
+import {
+  analysisContextQuery,
+  appQuery,
+  browser_appname_regex,
+  browser_appnames,
+  activityQuery,
+  androidBrowserQuery,
+  browserOnlyQuery,
+  canonicalEvents,
+  categoryQuery,
+  chromeAppnameRegex,
+  editorActivityQuery,
+  fullDesktopQuery,
+  multideviceQuery,
+  querystr_to_array,
+} from '~/queries';
+import type { DesktopQueryParams, MultiQueryParams } from '~/queries';
+import type { Rule } from '~/util/classes';
+
+// Convert ActivityWatch (?i) patterns to JS RegExp with i flag for testing.
+// AW server uses Python-style (?i) inline flag; JS uses RegExp 'i' flag instead.
+function toRegex(pattern: string): RegExp {
+  const stripped = pattern.replace(/^\(\?i\)/, '');
+  return new RegExp(stripped, 'i');
+}
+
+describe('browser_appname_regex', () => {
+  test('chrome pattern matches all known Chrome/Chromium app names', () => {
+    const re = toRegex(browser_appname_regex.chrome);
+    // Every entry from the old exact-match list
+    const knownNames = [
+      'Google Chrome',
+      'Google-chrome',
+      'Chrome.exe',
+      'chrome.exe',
+      'google-chrome-stable',
+      'Google_Chrome',
+      'Chromium',
+      'Chromium-browser',
+      'chromium-browser',
+      'Chromium-browser-chromium',
+      'Chromium.exe',
+      'chromium.exe',
+      'Google-chrome-beta',
+      'Google-chrome-unstable',
+      // Chromium forks that report through the chrome extension bucket (#927)
+      'Arc',
+      'arc.exe',
+      'Arc.exe',
+      'Dia',
+      'Dia.exe',
+      // Helium running the Chrome Web Store extension build (#898)
+      'Helium',
+      'helium.exe',
+      // Ungoogled Chromium via the Chrome Web Store extension build; its process
+      // name does not start with 'chromium' so the base alternatives miss it.
+      'ungoogled-chromium',
+      'ungoogled_chromium',
+      'Ungoogled Chromium',
+      'ungoogled-chromium-bin',
+    ];
+    for (const name of knownNames) {
+      expect(re.test(name)).toBe(true);
+    }
+  });
+
+  test('chrome pattern does not false-positive', () => {
+    const re = toRegex(browser_appname_regex.chrome);
+    // Flatpak / bundle IDs are in the exact list, not matched by regex
+    expect(re.test('com.google.Chrome')).toBe(false);
+    expect(re.test('company.thebrowser.dia')).toBe(false);
+    expect(re.test('Slack')).toBe(false);
+    expect(re.test('Electron')).toBe(false);
+    // The fork alternatives are anchored, so names merely starting with them don't match
+    expect(re.test('archive')).toBe(false);
+    expect(re.test('arcade')).toBe(false);
+    expect(re.test('Dialog')).toBe(false);
+    expect(re.test('Heliumburger')).toBe(false);
+  });
+
+  test('chrome exact list includes the Dia macOS bundle id', () => {
+    expect(browser_appnames.chrome).toContain('company.thebrowser.dia');
+  });
+
+  test('chromeAppnameRegex only drops forks that have a dedicated bucket', () => {
+    const noArc = toRegex(chromeAppnameRegex(['arc']));
+    expect(noArc.test('Arc')).toBe(false);
+    expect(noArc.test('arc.exe')).toBe(false);
+    expect(noArc.test('Dia')).toBe(true);
+    expect(noArc.test('Dia.exe')).toBe(true);
+    expect(noArc.test('Google Chrome')).toBe(true);
+
+    const noDia = toRegex(chromeAppnameRegex(['dia']));
+    expect(noDia.test('Dia')).toBe(false);
+    expect(noDia.test('Arc')).toBe(true);
+
+    const both = toRegex(chromeAppnameRegex(['arc', 'dia']));
+    expect(both.test('Arc')).toBe(false);
+    expect(both.test('Dia')).toBe(false);
+    expect(both.test('Chrome')).toBe(true);
+
+    const noHelium = toRegex(chromeAppnameRegex(['helium']));
+    expect(noHelium.test('Helium')).toBe(false);
+    expect(noHelium.test('helium.exe')).toBe(false);
+    expect(noHelium.test('Arc')).toBe(true);
+    expect(noHelium.test('Google Chrome')).toBe(true);
+
+    expect(chromeAppnameRegex()).toBe(browser_appname_regex.chrome);
+  });
+
+  test('firefox pattern matches all known Firefox/LibreWolf/Waterfox app names', () => {
+    const re = toRegex(browser_appname_regex.firefox);
+    // Every entry from the old exact-match list
+    const knownNames = [
+      'Firefox',
+      'Firefox.exe',
+      'firefox',
+      'firefox.exe',
+      'Firefox Developer Edition',
+      'firefoxdeveloperedition',
+      'Firefox-esr',
+      'firefox-esr-esr140', // versioned ESR (issue #749)
+      'Firefox Beta',
+      'Nightly',
+      'firefox-aurora',
+      'firefox-trunk-dev',
+      'LibreWolf-Portable.exe',
+      'LibreWolf',
+      'LibreWolf.exe',
+      'Librewolf',
+      'Librewolf.exe',
+      'librewolf',
+      'librewolf.exe',
+      'librewolf-default',
+      'Waterfox',
+      'Waterfox.exe',
+      'waterfox',
+      'waterfox.exe',
+    ];
+    for (const name of knownNames) {
+      expect(re.test(name)).toBe(true);
+    }
+  });
+
+  test('opera pattern matches all known Opera app names', () => {
+    const re = toRegex(browser_appname_regex.opera);
+    const knownNames = ['opera.exe', 'Opera.exe', 'Opera'];
+    for (const name of knownNames) {
+      expect(re.test(name)).toBe(true);
+    }
+  });
+
+  test('brave pattern matches all known Brave app names', () => {
+    const re = toRegex(browser_appname_regex.brave);
+    const knownNames = [
+      'Brave-browser',
+      'brave-browser',
+      'Brave Browser',
+      'brave.exe',
+      'Brave.exe',
+    ];
+    for (const name of knownNames) {
+      expect(re.test(name)).toBe(true);
+    }
+  });
+
+  test('edge pattern matches all known Edge app names', () => {
+    const re = toRegex(browser_appname_regex.edge);
+    const knownNames = [
+      'msedge.exe',
+      'Microsoft Edge',
+      'Microsoft Edge Beta',
+      'Microsoft-Edge-Stable',
+      'Microsoft-edge',
+      'microsoft-edge',
+      'microsoft-edge-beta',
+      'microsoft-edge-dev',
+    ];
+    for (const name of knownNames) {
+      expect(re.test(name)).toBe(true);
+    }
+  });
+
+  test('arc pattern matches known Arc names but not arc-prefixed words', () => {
+    const re = toRegex(browser_appname_regex.arc);
+    // Known app names
+    expect(re.test('Arc')).toBe(true);
+    expect(re.test('arc.exe')).toBe(true);
+    expect(re.test('Arc.exe')).toBe(true);
+    // Must NOT match names that merely contain "arc"
+    expect(re.test('archive')).toBe(false);
+    expect(re.test('arcade')).toBe(false);
+    expect(re.test('ReactNativeArcApp')).toBe(false);
+  });
+
+  test('vivaldi pattern matches all known Vivaldi app names', () => {
+    const re = toRegex(browser_appname_regex.vivaldi);
+    const knownNames = [
+      'Vivaldi-stable',
+      'Vivaldi-snapshot',
+      'vivaldi.exe',
+      'Vivaldi.exe',
+      'Vivaldi',
+    ];
+    for (const name of knownNames) {
+      expect(re.test(name)).toBe(true);
+    }
+  });
+
+  test('orion pattern matches known Orion app names', () => {
+    const re = toRegex(browser_appname_regex.orion);
+    expect(re.test('Orion')).toBe(true);
+    expect(re.test('orion')).toBe(true);
+  });
+
+  test('yandex pattern matches known Yandex app names', () => {
+    const re = toRegex(browser_appname_regex.yandex);
+    expect(re.test('Yandex')).toBe(true);
+    expect(re.test('yandex')).toBe(true);
+  });
+
+  test('zen pattern matches all known Zen Browser app names', () => {
+    const re = toRegex(browser_appname_regex.zen);
+    const knownNames = [
+      'Zen',
+      'Zen Browser',
+      'Zen-browser',
+      'zen',
+      'zen browser',
+      'zen-browser',
+      'zen.exe',
+      'Zen.exe',
+    ];
+    for (const name of knownNames) {
+      expect(re.test(name)).toBe(true);
+    }
+  });
+
+  test('floorp pattern matches all known Floorp app names', () => {
+    const re = toRegex(browser_appname_regex.floorp);
+    const knownNames = ['Floorp', 'floorp.exe', 'Floorp.exe', 'floorp'];
+    for (const name of knownNames) {
+      expect(re.test(name)).toBe(true);
+    }
+  });
+});
+
+describe('chrome fork matching in generated query', () => {
+  const params = {
+    bid_window: 'aw-watcher-window_testhost',
+    bid_afk: 'aw-watcher-afk_testhost',
+    filter_afk: true,
+    include_audible: false,
+    categories: [],
+    filter_categories: [],
+  };
+
+  test('chrome bucket query includes Dia bundle id and process-name regex', () => {
+    const query = fullDesktopQuery({
+      ...params,
+      bid_browsers: ['aw-watcher-web-chrome_testhost'],
+    }).join('\n');
+    expect(query).toContain('company.thebrowser.dia');
+    // After fix: JSON.stringify double-escaping is undone, so query has single \.
+    expect(query).toContain('dia(\\.exe)?$');
+  });
+
+  test('chrome-only bucket (no dedicated Helium bucket) still matches Helium app name (#898)', () => {
+    const query = fullDesktopQuery({
+      ...params,
+      bid_browsers: ['aw-watcher-web-chrome_testhost'],
+    }).join('\n');
+    expect(query).toContain('helium(\\.exe)?$');
+  });
+
+  test('mixed chrome and Helium buckets: Helium bucket owns Helium events, chrome stream excludes Helium', () => {
+    const query = fullDesktopQuery({
+      ...params,
+      bid_browsers: ['aw-watcher-web-chrome_testhost', 'aw-watcher-web-helium_testhost'],
+    }).join('\n');
+    const chromeWindowFilter = query.slice(
+      query.indexOf('window_chrome_re ='),
+      query.indexOf('events_chrome = filter_period_intersect')
+    );
+    // The chrome stream must NOT match Helium when a dedicated Helium bucket exists.
+    expect(chromeWindowFilter).not.toContain('helium(\\.exe)?$');
+    // Dia has no dedicated bucket and still writes to chrome — keep matching it.
+    expect(chromeWindowFilter).toContain('dia(\\.exe)?$');
+    // The Helium bucket keeps its own matching path.
+    expect(query).toContain('window_helium_re =');
+    expect(query).toContain('(?i)(helium)');
+    // Streams concat plainly; no overlap-masking that would drop real activity.
+    expect(query).toContain('browser_events = concat(browser_events, events_chrome);');
+    expect(query).toContain('browser_events = concat(browser_events, events_helium);');
+    expect(query).not.toContain('union_no_overlap');
+  });
+
+  test('mixed chrome and Arc buckets: Arc bucket owns Arc events, chrome stream excludes Arc', () => {
+    const query = fullDesktopQuery({
+      ...params,
+      bid_browsers: ['aw-watcher-web-chrome_testhost', 'aw-watcher-web-arc_testhost'],
+    }).join('\n');
+    const chromeWindowFilter = query.slice(
+      query.indexOf('window_chrome_re ='),
+      query.indexOf('events_chrome = filter_period_intersect')
+    );
+    // The chrome stream must NOT match Arc when a dedicated Arc bucket exists.
+    expect(chromeWindowFilter).not.toContain('arc(\\.exe)?$');
+    // Dia has no dedicated bucket and still writes to chrome — keep matching it.
+    expect(chromeWindowFilter).toContain('dia(\\.exe)?$');
+    // The Arc bucket keeps its own matching path.
+    expect(query).toContain('window_arc_re =');
+    expect(query).toContain('arc(\\.exe)?$');
+    // Streams concat plainly; no overlap-masking that would drop real activity.
+    expect(query).toContain('browser_events = concat(browser_events, events_chrome);');
+    expect(query).toContain('browser_events = concat(browser_events, events_arc);');
+    expect(query).not.toContain('union_no_overlap');
+  });
+
+  test('unrelated browser buckets concat instead of dropping overlaps', () => {
+    const query = fullDesktopQuery({
+      ...params,
+      bid_browsers: ['aw-watcher-web-chrome_testhost', 'aw-watcher-web-firefox_testhost'],
+    }).join('\n');
+    expect(query).toContain('browser_events = concat(browser_events, events_chrome);');
+    expect(query).toContain('browser_events = concat(browser_events, events_firefox);');
+    expect(query).not.toContain('union_no_overlap(browser_events, events_');
+    expect(query).not.toContain('union_no_overlap(events_chrome, events_firefox)');
+    expect(query).not.toContain('chrome_arc_events');
+  });
+
+  test('chrome+arc with a third browser concat all streams independently', () => {
+    const query = fullDesktopQuery({
+      ...params,
+      bid_browsers: [
+        'aw-watcher-web-chrome_testhost',
+        'aw-watcher-web-arc_testhost',
+        'aw-watcher-web-firefox_testhost',
+      ],
+    }).join('\n');
+    expect(query).toContain('browser_events = concat(browser_events, events_chrome);');
+    expect(query).toContain('browser_events = concat(browser_events, events_firefox);');
+    expect(query).not.toContain('union_no_overlap');
+  });
+});
+
+describe('browser regex escaping in generated query', () => {
+  const params = {
+    bid_window: 'aw-watcher-window_testhost',
+    bid_afk: 'aw-watcher-afk_testhost',
+    filter_afk: true,
+    include_audible: false,
+    categories: [],
+    filter_categories: [],
+  };
+
+  test('arc bucket query emits single-backslash regex (not double-escaped)', () => {
+    // Regression test for #1080: JSON.stringify was doubling backslashes, so
+    // arc(\.exe)?$ became arc(\\.exe)?$ in the query text — aw-server-rust then
+    // treated \\.exe as a literal backslash + any char + exe, so Arc.exe on
+    // Windows never matched.
+    const query = fullDesktopQuery({
+      ...params,
+      bid_browsers: ['aw-watcher-web-arc_testhost'],
+    }).join('\n');
+    expect(query).toContain('window_arc_re =');
+    // After fix: single backslash (\.exe), not double (\\. exe)
+    expect(query).toContain('arc(\\.exe)?$');
+    expect(query).not.toContain('arc(\\\\.exe)?$');
+  });
+
+  test('chrome bucket regex with embedded arc/dia patterns uses single backslash', () => {
+    const query = fullDesktopQuery({
+      ...params,
+      bid_browsers: ['aw-watcher-web-chrome_testhost'],
+    }).join('\n');
+    expect(query).toContain('window_chrome_re =');
+    // arc and dia are embedded in the chrome regex; both should have single backslash
+    expect(query).toContain('arc(\\.exe)?$');
+    expect(query).toContain('dia(\\.exe)?$');
+    expect(query).not.toContain('arc(\\\\.exe)?$');
+    expect(query).not.toContain('dia(\\\\.exe)?$');
+  });
+});
+
+describe('querystr_to_array', () => {
+  test('splits simple multi-statement query correctly', () => {
+    const query = 'events = query_bucket("aw-watcher-window_host"); RETURN = {"events": events};';
+    const result = querystr_to_array(query);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe('events = query_bucket("aw-watcher-window_host");');
+    expect(result[1]).toBe('RETURN = {"events": events};');
+  });
+
+  test('does not split on semicolons inside string literals (category regex case)', () => {
+    // A category rule with a semicolon in the regex — the naive .split(';') would shred this.
+    const query = 'events = categorize(events, [["Work", {"type": "regex", "regex": "foo;bar"}]]);';
+    const result = querystr_to_array(query);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(
+      'events = categorize(events, [["Work", {"type": "regex", "regex": "foo;bar"}]]);'
+    );
+  });
+
+  test('handles escaped double-quotes inside string literals', () => {
+    const query = 'x = "say \\"hello;world\\""; RETURN = x;';
+    const result = querystr_to_array(query);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toBe('x = "say \\"hello;world\\"";');
+    expect(result[1]).toBe('RETURN = x;');
+  });
+
+  test('filters out empty statements from whitespace-only segments', () => {
+    const query = '\n  events = query_bucket("bucket");\n  RETURN = events;\n';
+    const result = querystr_to_array(query);
+    expect(result).toHaveLength(2);
+  });
+});
+
+// AQL has no comment syntax, so any comment leaking into a generated query
+// makes the server reject it (#999). Strip string literals first, so
+// comment-like text inside them (e.g. "https://" in a category regex) is
+// allowed, then look for `//` and `/*` anywhere, not only at line starts.
+function stripStringLiterals(query: string): string {
+  return query.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+}
+
+describe('generated AQL contains no JavaScript comments', () => {
+  // A category regex with comment-like text, which must not be flagged
+  const categories: [string[], Rule][] = [
+    [['Work'], { type: 'regex', regex: 'https://work|/\\*' }],
+  ];
+  const desktop: DesktopQueryParams = {
+    bid_window: 'aw-watcher-window_testhost',
+    bid_afk: 'aw-watcher-afk_testhost',
+    bid_browsers: ['aw-watcher-web-firefox_testhost'],
+    bid_stopwatch: 'aw-stopwatch',
+    filter_afk: true,
+    include_audible: true,
+    always_active_pattern: 'zoom',
+    categories,
+    filter_categories: [['Work']],
+  };
+  const multi: MultiQueryParams = {
+    hosts: ['testhost', 'phone'],
+    host_params: { phone: { bid_android: 'aw-watcher-android-test' } },
+    filter_afk: true,
+    always_active_pattern: '',
+    categories,
+    filter_categories: [],
+  };
+
+  test.each([
+    ['fullDesktopQuery', () => fullDesktopQuery(desktop)],
+    ['multideviceQuery', () => multideviceQuery(multi)],
+    ['analysisContextQuery', () => analysisContextQuery(desktop)],
+    ['categoryQuery (desktop)', () => categoryQuery(desktop)],
+    ['categoryQuery (multidevice)', () => categoryQuery(multi)],
+    ['appQuery', () => appQuery('aw-watcher-android-test', categories, [])],
+    ['editorActivityQuery', () => editorActivityQuery(['aw-watcher-vim_testhost'])],
+    ['activityQuery', () => activityQuery(['aw-watcher-afk_testhost'])],
+  ])('%s', (_name, build) => {
+    const query = build().join('\n');
+    const code = stripStringLiterals(query);
+    expect(code).not.toMatch(/\/\//);
+    expect(code).not.toMatch(/\/\*/);
+  });
+
+  test('the check itself catches inline and block comments', () => {
+    const code = (q: string) => stripStringLiterals(q);
+    expect(code('events = []; // inline')).toMatch(/\/\//);
+    expect(code('/* block */ events = [];')).toMatch(/\/\*/);
+    expect(code('x = "https://a/*b";')).not.toMatch(/\/\/|\/\*/);
+  });
+});
+
+// Regression guard for ActivityWatch/aw-webui#959:
+// aw-watcher-android events carry "app"/"package"/"classname" but NOT "title".
+// merge_events_by_keys skips events missing any requested key, so including
+// "title" in the Android (non-iOS) path collapsed all activity to 0s.
+describe('appQuery merge key regression', () => {
+  const categories: any[] = [];
+  const filter_categories: string[][] = [];
+
+  test('Android watcher path does NOT merge on "title"', () => {
+    const q = appQuery('aw-watcher-android_device', categories, filter_categories, false);
+    const joined = q.join('\n');
+    // The canonical-events step must not reference "title" for the non-iOS path
+    expect(joined).not.toContain('merge_events_by_keys(events, ["app", "title"])');
+    // The title_events step must merge on "classname" but not "title"
+    expect(joined).toContain('"app", "classname"');
+    expect(joined).not.toContain('"app", "classname", "title"');
+  });
+
+  test('iOS ScreenTime path DOES merge on "title"', () => {
+    const q = appQuery('aw-import-screentime_device', categories, filter_categories, true);
+    const joined = q.join('\n');
+    // The canonical-events step must reference "title" for the iOS path
+    expect(joined).toContain('merge_events_by_keys(events, ["app", "title"])');
+    // The title_events step must merge on ["app", "title"] for iOS (no "classname" — ScreenTime events lack it)
+    expect(joined).toContain(
+      'title_events = sort_by_duration(merge_events_by_keys(events, ["app", "title"]));'
+    );
+    expect(joined).not.toContain('"app", "classname", "title"');
+  });
+});
+
+// Regression guard for the category/Category-Builder ScreenTime caller paths:
+// query_category_time_by_period and CategoryBuilder.vue both call categoryQuery/
+// canonicalEvents with bid_android.  They were missing isIos, causing ScreenTime
+// buckets to lose title distinctions before category assignment.
+describe('categoryQuery merge key regression (ScreenTime callers)', () => {
+  const categories: any[] = [];
+  const filter_categories: string[][] = [];
+
+  test('Android watcher bucket does NOT merge on "title" in category query', () => {
+    const q = categoryQuery({
+      bid_android: 'aw-watcher-android_device',
+      categories,
+      filter_categories,
+      filter_afk: false,
+    });
+    const joined = q.join('\n');
+    expect(joined).not.toContain('merge_events_by_keys(events, ["app", "title"])');
+  });
+
+  test('iOS ScreenTime bucket DOES merge on "title" in category query when isIos=true', () => {
+    const q = categoryQuery({
+      bid_android: 'aw-import-screentime_device',
+      isIos: true,
+      categories,
+      filter_categories,
+      filter_afk: false,
+    });
+    const joined = q.join('\n');
+    expect(joined).toContain('merge_events_by_keys(events, ["app", "title"])');
+  });
+});
+
+test('canonicalEvents serializes select_keys into categorize()', () => {
+  const query = canonicalEvents({
+    bid_android: 'aw-watcher-android_test',
+    categories: [[['Work'], { type: 'regex', regex: 'Firefox', select_keys: ['app'] }]],
+    filter_categories: [],
+  });
+  expect(query).toContain('"select_keys":["app"]');
+  expect(query).toContain('"regex":"Firefox"');
+});
+
+describe('androidBrowserQuery', () => {
+  test('matches mobile packages exactly without desktop substring regexes', () => {
+    const joined = androidBrowserQuery(
+      'aw-watcher-android_device',
+      ['aw-watcher-web-firefox', 'aw-watcher-web-brave'],
+      [],
+      []
+    ).join('\n');
+    expect(joined).toContain('org.mozilla.fenix');
+    expect(joined).toContain('com.brave.browser_nightly');
+    // aw-android records display labels in app and identifiers in package.
+    expect(joined).toContain('window_firefox = filter_keyvals(events, "package",');
+    expect(joined).not.toContain('filter_keyvals(events, "app",');
+    // Firefox's desktop "nightly" alternative would also match Brave Nightly.
+    expect(joined).not.toContain('filter_keyvals_regex(events, "app"');
+  });
+
+  test.each([
+    ['yandex', 'ru.yandex.browser'],
+    ['edge', 'com.microsoft.emmx.dev'],
+  ])('matches the Android package for %s without losing URL events', (browser, androidPackage) => {
+    const joined = androidBrowserQuery(
+      'aw-watcher-android_device',
+      [`aw-watcher-web-${browser}_phone`],
+      [],
+      []
+    ).join('\n');
+    const foregroundFilter = joined
+      .split('\n')
+      .find(line => line.includes(`window_${browser} = filter_keyvals(events, "package",`));
+    expect(foregroundFilter).toContain(`"${androidPackage}"`);
+    expect(joined).toContain(`filter_period_intersect(events_${browser}, window_${browser})`);
+  });
+
+  test('does not treat browser names in a hostname or profile as bucket identifiers', () => {
+    const joined = androidBrowserQuery(
+      'aw-watcher-android_device',
+      ['aw-watcher-web-firefox_chromephone', 'aw-watcher-web-brave_firefox-profile'],
+      [],
+      []
+    ).join('\n');
+    expect(joined.match(/filter_period_intersect/g)).toHaveLength(2);
+    expect(joined).not.toContain('events_chrome =');
+    expect(joined).toContain(
+      'events_firefox = flood(query_bucket("aw-watcher-web-firefox_chromephone"))'
+    );
+    expect(joined).toContain(
+      'events_brave = flood(query_bucket("aw-watcher-web-brave_firefox-profile"))'
+    );
+  });
+
+  test('preserves browser-only data for unknown custom browser names', () => {
+    const joined = androidBrowserQuery(
+      'aw-watcher-android_device',
+      ['aw-watcher-web-cromite_phone', 'aw-watcher-web-personal_phone', 'aw-watcher-web-arc_phone'],
+      [],
+      []
+    ).join('\n');
+    expect(joined).toContain('query_bucket("aw-watcher-web-cromite_phone")');
+    expect(joined).toContain('query_bucket("aw-watcher-web-personal_phone")');
+    expect(joined).toContain('query_bucket("aw-watcher-web-arc_phone")');
+    expect(joined).not.toContain('filter_period_intersect');
+    expect(joined).toContain('split_url_events');
+  });
+
+  test('queries every bucket when a browser has multiple profiles', () => {
+    const buckets = [
+      'aw-watcher-web-firefox_profile1',
+      'aw-watcher-web-firefox_profile2',
+      'aw-watcher-web-firefox-synced-from-phone',
+    ];
+    const joined = androidBrowserQuery('aw-watcher-android_device', buckets, [], []).join('\n');
+    for (const bucket of buckets) {
+      expect(joined).toContain(`query_bucket("${bucket}")`);
+    }
+    expect(joined.match(/filter_period_intersect/g)).toHaveLength(3);
+  });
+
+  test('keeps all browser aggregates until chunks have been merged', () => {
+    const joined = androidBrowserQuery(
+      'aw-watcher-android_device',
+      ['aw-watcher-web-chrome'],
+      [],
+      []
+    ).join('\n');
+    expect(joined).not.toContain('limit_events(browser_');
+  });
+
+  test('keeps event timestamps so URL intersection uses real foreground periods', () => {
+    const joined = androidBrowserQuery(
+      'aw-watcher-android_device',
+      ['aw-watcher-web-chrome'],
+      [],
+      [],
+      false
+    ).join('\n');
+    // Without keep_event_timestamps, canonicalEvents merges by app and
+    // collapses Chrome 09:00–09:10 + 10:00–10:10 into one 20-minute event.
+    expect(joined).not.toContain('merge_events_by_keys(events, ["app"])');
+    expect(joined).not.toContain('merge_events_by_keys(events, ["app", "title"])');
+    expect(joined).toContain('filter_period_intersect');
+  });
+
+  test('does not apply category filter before selecting browser foreground periods', () => {
+    const joined = androidBrowserQuery(
+      'aw-watcher-android_device',
+      ['aw-watcher-web-chrome'],
+      [[['Work'], { type: 'regex', regex: 'Chrome' }]],
+      [['Work']],
+      false
+    ).join('\n');
+    expect(joined).not.toContain('filter_keyvals(events, "$category"');
+    expect(joined).toContain('com.android.chrome');
+  });
+
+  test('returns browser domains, urls, and titles in RETURN', () => {
+    const joined = androidBrowserQuery(
+      'aw-watcher-android_device',
+      ['aw-watcher-web-chrome'],
+      [],
+      [],
+      false
+    ).join('\n');
+    expect(joined).toContain('"domains"');
+    expect(joined).toContain('"urls"');
+    expect(joined).toContain('"titles"');
+    expect(joined).toContain('"duration"');
+  });
+});
+
+describe('browserOnlyQuery', () => {
+  test('returns a non-empty query array', () => {
+    const q = browserOnlyQuery(['aw-watcher-web-firefox']);
+    expect(q.length).toBeGreaterThan(0);
+  });
+
+  test('queries all provided browser buckets', () => {
+    const buckets = ['aw-watcher-web-firefox', 'aw-watcher-web-chrome'];
+    const joined = browserOnlyQuery(buckets).join('\n');
+    expect(joined).toContain('"aw-watcher-web-firefox"');
+    expect(joined).toContain('"aw-watcher-web-chrome"');
+  });
+
+  test('returns browser domains, urls, and titles in RETURN', () => {
+    const joined = browserOnlyQuery(['aw-watcher-web-firefox']).join('\n');
+    expect(joined).toContain('"domains"');
+    expect(joined).toContain('"urls"');
+    expect(joined).toContain('"titles"');
+    expect(joined).toContain('"duration"');
+  });
+
+  test('no inline or block comments in generated query', () => {
+    const joined = browserOnlyQuery(['aw-watcher-web-firefox']).join('\n');
+    const stripped = joined.replace(/"[^"]*"/g, '""');
+    expect(stripped).not.toMatch(/\/\//);
+    expect(stripped).not.toMatch(/\/\*/);
+  });
+});

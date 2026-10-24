@@ -1,0 +1,533 @@
+<template lang="pug">
+  div
+    div#visualization
+
+    div.small.text-muted.my-2(v-if="bucketsFromEither.length != 1")
+      i {{ $t('ui.timeline.bucketsNoEvents') }}
+
+    div(v-if="editingEvent")
+      EventEditor(v-model:open="editorOpen" :event="editingEvent" :bucket_id="editingEventBucket" @saved="onEventSaved")
+</template>
+
+<style lang="scss">
+div#visualization {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  overflow: visible;
+
+  .vis-timeline {
+    overflow: visible;
+  }
+
+  .vis-tooltip {
+    // Position tooltip above the cursor instead of overlapping the timeline bars
+    transform: translateY(-100%);
+    margin-top: -15px;
+    // Ensure tooltip is readable. vis-timeline sets `white-space: nowrap`, so
+    // long unbroken event data (JSON, URLs) would overflow the box and widen
+    // the whole page on mobile; wrap it and cap the width to the viewport.
+    max-width: min(400px, calc(100vw - 20px));
+    box-sizing: border-box;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+
+    // Keep labels on one line; only the values should wrap, otherwise long
+    // titles/URLs squeeze the label column down to a few characters.
+    th {
+      white-space: nowrap;
+      overflow-wrap: normal;
+      vertical-align: top;
+      padding-right: 0.5em;
+    }
+
+    td {
+      vertical-align: top;
+    }
+  }
+
+  .vis-labelset .vis-label .vis-inner {
+    max-width: 250px;
+    overflow: visible;
+    text-overflow: initial;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+
+  .timeline-timeline {
+    font-family: sans-serif !important;
+
+    .timeline-panel {
+      box-sizing: border-box;
+    }
+
+    .timeline-item {
+      border-radius: 2px;
+    }
+  }
+}
+</style>
+
+<script lang="ts">
+import _ from 'lodash';
+import { markRaw } from 'vue';
+import Color from 'color';
+import { buildTooltip } from '../util/tooltip';
+import { getCategoryColorFromEvent, getColorFromCategory, getTitleAttr } from '../util/color';
+import { useCategoryStore } from '~/stores/categories';
+import { getSwimlane } from '../util/swimlane';
+import {
+  indexTimelineEvents,
+  visibleTimelineEvents,
+  syncTimelineData,
+} from '../util/timelineIndex';
+import { DataSet } from 'vis-data';
+import { IEvent } from '../util/interfaces';
+import { formatTimelineBucketLabelHtml, shortenBucketLabel } from '../util/timelineLabels';
+
+import { Timeline } from 'vis-timeline/esnext';
+import 'vis-timeline/styles/vis-timeline-graph2d.css';
+import EventEditor from '~/components/EventEditor.vue';
+
+const PIXELS_PER_WHEEL_LINE = 40;
+// Group id of the derived category row; its events are not editable.
+const CATEGORIZED_ROW = '__categorized__';
+const PIXELS_PER_WHEEL_PAGE = 800;
+
+export default {
+  components: {
+    EventEditor,
+  },
+  props: {
+    buckets: { type: Array },
+    events: { type: Array },
+    categorizedEvents: { type: Array, default: () => [] },
+    showRowLabels: { type: Boolean },
+    queriedInterval: { type: Array },
+    showQueriedInterval: { type: Boolean },
+    swimlane: { type: String },
+    updateTimelineWindow: { type: Boolean },
+  },
+  data() {
+    return {
+      editorOpen: false,
+      timeline: null,
+      filterShortEvents: true,
+      items: [],
+      groups: [],
+      options: {
+        zoomMin: 1000 * 60, // 10min in milliseconds
+        zoomMax: 1000 * 60 * 60 * 24 * 31 * 3, // about three months in milliseconds
+        stack: false,
+        tooltip: {
+          followMouse: true,
+          overflowMethod: 'flip',
+          delay: 0,
+        },
+        // Keep vertical wheel input as zoom-only. Without preferZoom, vis-timeline
+        // zooms around the cursor and then pans the same wheel event when
+        // horizontalScroll is enabled, which makes the zoom anchor drift.
+        preferZoom: true,
+        // Horizontal scroll navigation (see #629). Dominant horizontal wheel
+        // events are handled by onHorizontalWheel.
+        horizontalScroll: true, // horizontal scroll/swipe pans the timeline
+      },
+      editingEvent: null,
+      editingEventBucket: null,
+      eventOverrides: {} as Record<string, IEvent>,
+      pendingWindowRestore: null as { start: Date; end: Date } | null,
+
+      updateHasRun: false,
+    };
+  },
+  computed: {
+    bucketsFromEither() {
+      if (this.buckets) {
+        return this.buckets;
+      } else if (this.events) {
+        // If buckets not passed, check if events have been passed and generate a bucket from those events
+        return [
+          {
+            id: 'events',
+            type: 'search',
+            events: this.events,
+          },
+        ];
+      } else {
+        console.error('No buckets or events passed to timeline');
+        return [];
+      }
+    },
+    eventIndex() {
+      const rows = [...this.bucketsFromEither];
+      if (this.categorizedEvents?.length) {
+        rows.unshift({ id: CATEGORIZED_ROW, type: 'categorized', events: this.categorizedEvents });
+      }
+      // The derived category row keeps subsecond intervals, as they are already merged.
+      return indexTimelineEvents(
+        rows,
+        bucket => this.filterShortEvents && bucket.id !== CATEGORIZED_ROW,
+        (bucketId, event) => this.displayEvent(bucketId, event)
+      );
+    },
+  },
+  watch: {
+    categorizedEvents() {
+      this.update();
+    },
+    buckets() {
+      // For some reason, an object is passed here, after which the correct array arrives
+      if (this.buckets.length === undefined) {
+        //console.log("I told you so!")
+        return;
+      }
+
+      this.eventOverrides = {};
+      this.update();
+    },
+    events() {
+      if (this.events.length === undefined) {
+        return;
+      }
+
+      this.eventOverrides = {};
+      this.update();
+    },
+  },
+  created() {
+    this.itemData = new DataSet();
+    this.groupData = new DataSet();
+    this.itemEvents = new Map();
+    this.preparedItems = new Map();
+    this.hasInitialRange = false;
+    this.viewportFrame = null;
+    this.renderedViewport = null;
+  },
+  mounted() {
+    this.$nextTick(() => {
+      if (this._isDestroyed || this._isBeingDestroyed) return;
+      const el = this.$el.querySelector('#visualization');
+      el.addEventListener('wheel', this.onHorizontalWheel, {
+        capture: true,
+        passive: false,
+      });
+      this.options.tooltip.template = item => item.title || this.tooltipForItem(item.id);
+      this.timeline = markRaw(new Timeline(el, this.itemData, this.groupData, this.options));
+      this.timeline.on('rangechange', this.scheduleViewportUpdate);
+      this.timeline.on('select', properties => {
+        // Sends both 'press' and 'tap' events, only one should trigger
+        if (properties.event.type == 'tap') {
+          this.onSelect(properties);
+        }
+      });
+
+      this.ensureUpdate();
+    });
+  },
+  beforeUnmount() {
+    if (this.viewportFrame != null) cancelAnimationFrame(this.viewportFrame);
+    this.itemEvents?.clear();
+    this.preparedItems?.clear();
+    this.renderedViewport = null;
+    const el = this.$el.querySelector('#visualization');
+    if (el) {
+      el.removeEventListener('wheel', this.onHorizontalWheel, { capture: true });
+    }
+    if (this.timeline) {
+      this.timeline.destroy();
+      this.timeline = null;
+    }
+  },
+  methods: {
+    scheduleViewportUpdate() {
+      if (this.viewportFrame != null) return;
+      this.viewportFrame = requestAnimationFrame(() => {
+        this.viewportFrame = null;
+        if (this.timeline) this.update(false);
+      });
+    },
+    tooltipForItem(id) {
+      if (id === 'queried-interval' && this.queriedInterval) {
+        return buildTooltip(
+          { type: 'test' },
+          {
+            timestamp: this.queriedInterval[0],
+            duration: this.queriedInterval[1].diff(this.queriedInterval[0], 'seconds'),
+            data: { title: 'query' },
+          }
+        );
+      }
+      const item = this.itemEvents.get(id);
+      return item ? buildTooltip({ ...item.bucket, type: item.bucket.type || '' }, item.event) : '';
+    },
+    onHorizontalWheel: function (event: WheelEvent) {
+      if (!this.timeline || Math.abs(event.deltaX) <= Math.abs(event.deltaY)) {
+        return;
+      }
+
+      const currentWindow = this.timeline.getWindow();
+      const start = currentWindow.start.valueOf();
+      const end = currentWindow.end.valueOf();
+      let deltaX = event.deltaX;
+      if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+        deltaX *= PIXELS_PER_WHEEL_LINE;
+      } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+        deltaX *= PIXELS_PER_WHEEL_PAGE;
+      }
+      const diff = (deltaX / 120) * ((end - start) / 20);
+
+      this.timeline.setWindow(new Date(start + diff), new Date(end + diff), {
+        animation: false,
+      });
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    },
+    openEditor: function () {
+      this.editorOpen = true;
+    },
+    displayEvent: function (bucketId: string, event: IEvent): IEvent {
+      return this.eventOverrides[`${bucketId}\0${event.id}`] || event;
+    },
+    onEventSaved: function (event: IEvent, bucketId?: string) {
+      const bucket = bucketId || this.editingEventBucket;
+      const key = `${bucket}\0${event.id}`;
+      this.eventOverrides[key] = event;
+      this.editingEvent = event;
+      if (this.timeline) {
+        const w = this.timeline.getWindow();
+        this.pendingWindowRestore = { start: w.start, end: w.end };
+      }
+      this.update();
+      this.$emit('event-saved', event);
+    },
+    onSelect: async function (properties) {
+      if (properties.items.length == 0) {
+        return;
+      } else if (properties.items.length == 1) {
+        const selected = this.itemEvents.get(properties.items[0]);
+        if (!selected) return;
+        const event = selected.event;
+        const bucketId = selected.bucket.id;
+
+        // Skip editing if event has no ID (e.g. merged query results) or bucket is a placeholder
+        if (!event.id || !bucketId || bucketId === 'events' || bucketId === 'search') {
+          console.log(
+            'Event has no ID or bucket is a placeholder, skipping editor',
+            event,
+            bucketId
+          );
+          return;
+        }
+
+        // We retrieve the full event to ensure if's not cut-off by the query range
+        // See: https://github.com/ActivityWatch/aw-webui/pull/320#issuecomment-1056921587
+        this.editingEvent = await this.$aw.getEvent(bucketId, event.id);
+        this.editingEventBucket = bucketId;
+
+        this.$nextTick(() => {
+          console.log('Editing event', event, ', in bucket', bucketId);
+          this.openEditor();
+        });
+      } else {
+        alert('selected multiple items: ' + JSON.stringify(properties.items));
+      }
+    },
+    abbreviateBucketName(bucketId: string): string {
+      // Kept for callers that don't know about multi-host. update() builds
+      // labels directly via formatTimelineBucketLabelHtml so it can pass
+      // the multi-host hint.
+      return formatTimelineBucketLabelHtml(bucketId);
+    },
+    ensureUpdate() {
+      // Will only run update() if data available and never ran before
+      if (!this.updateHasRun) {
+        this.update();
+      }
+    },
+    update(resetWindow = true) {
+      // Guard against the buckets/events watch firing before mounted's
+      // $nextTick has constructed the vis Timeline. Otherwise revisiting
+      // the route with the keep-alive cache cleared throws
+      // "can't access property setData, this.timeline is null".
+      if (!this.timeline) return;
+
+      const index = this.eventIndex;
+      // The window to show, applied after the data is synced below: vis-timeline
+      // lays out items one by one (forcing a reflow each) when they are added
+      // inside the visible window, but in batches when the window moves onto them.
+      let nextWindow: [number, number] | null = null;
+      let bounds: [number, number] | null = null;
+      if (resetWindow) {
+        const start = this.queriedInterval?.[0]?.valueOf() ?? index.entries[0]?.start;
+        const end = this.queriedInterval?.[1]?.valueOf() ?? index.ends[index.ends.length - 1];
+        if (start !== undefined && end !== undefined) {
+          // Always bound scrolling to the queried interval when one is given, even
+          // if the caller doesn't want the visible window reset (e.g. the Daily
+          // Timeline on the Activity page, see #996).
+          let boundsChanged = false;
+          if (this.queriedInterval || this.updateTimelineWindow) {
+            // vis-timeline doesn't re-clamp the visible window when min/max
+            // change, so a view left zoomed into the previous day would stay out
+            // of range. Reset the window when the bounds move, but keep the
+            // user's zoom when the same interval is re-rendered.
+            boundsChanged = this.options.min !== start || this.options.max !== end;
+            bounds = [start, end];
+          }
+          // Only items near the window are rendered, so the first render
+          // needs one even when there are no bounds to apply.
+          if (this.updateTimelineWindow || boundsChanged || !this.hasInitialRange) {
+            this.hasInitialRange = true;
+            nextWindow = [start, end];
+          }
+        }
+      }
+      // Keep the user's view in place after an edit re-renders the data.
+      if (this.pendingWindowRestore) {
+        nextWindow = [
+          this.pendingWindowRestore.start.valueOf(),
+          this.pendingWindowRestore.end.valueOf(),
+        ];
+        this.pendingWindowRestore = null;
+      }
+      this.updateHasRun = true;
+
+      const timelineWindow = this.timeline.getWindow();
+      const [start, end] = nextWindow ?? [
+        timelineWindow.start.valueOf(),
+        timelineWindow.end.valueOf(),
+      ];
+      const buffer = (end - start) / 2;
+      const previous = this.renderedViewport;
+      // Reuse the loaded buffer for small pans, leaving 10% of a window as
+      // overscan before refilling it. Zooms still sync every frame: deferring
+      // them adds too many visible items at once and causes expensive reflows.
+      if (
+        !resetWindow &&
+        previous?.index === index &&
+        previous.width === end - start &&
+        start >= previous.start &&
+        end <= previous.end
+      ) {
+        return;
+      }
+
+      // Build groups
+      const buckets = this.bucketsFromEither;
+
+      // Decide whether to surface hostnames on labels. We do it
+      // all-or-nothing: if ANY two host-attributed buckets share the same
+      // shortened label (e.g. two "window" buckets on different hosts),
+      // every host-attributed row gets the "@ host" suffix for
+      // consistency. Buckets without a real hostname (stopwatch /
+      // aw-watcher-web-*, which aren't per-host yet — see
+      // https://github.com/ActivityWatch/activitywatch/issues/ for
+      // host attribution of these watchers) are always shown bare.
+      // TODO: drop the hostnameless-exception branch once
+      // stopwatch/browser buckets are migrated to per-host ids.
+      const realHost = (b: any): string | undefined => {
+        const h = b && (b.hostname || (b.data && b.data.hostname));
+        return h && h !== 'unknown' ? h : undefined;
+      };
+      const labelCounts: Record<string, number> = {};
+      _.each(buckets, b => {
+        if (b && b.id && realHost(b)) {
+          const short = shortenBucketLabel(b.id) || b.id;
+          labelCounts[short] = (labelCounts[short] || 0) + 1;
+        }
+      });
+      const hasCollision = _.some(labelCounts, c => c > 1);
+
+      let groups = _.map(buckets, bucket => {
+        // If bucket id is not set, then if only one bucket is given, assume result of a search/query and set a constant placeholder one.
+        // Otherwise, log a warning.
+        if (bucket.id === undefined) {
+          if (buckets.length === 1) {
+            bucket.id = 'events';
+          } else {
+            console.warn(
+              'Bucket id is not set, but there are multiple buckets. This is not supported.'
+            );
+          }
+        }
+        let label = '';
+        if (this.showRowLabels) {
+          const host = realHost(bucket);
+          label = formatTimelineBucketLabelHtml(bucket.id, {
+            hostname: hasCollision && host ? host : undefined,
+          });
+        }
+        return { id: bucket.id, content: label };
+      });
+
+      if (this.categorizedEvents?.length) {
+        groups.unshift({ id: CATEGORIZED_ROW, content: this.showRowLabels ? 'Categorized' : '' });
+      }
+
+      const visible = visibleTimelineEvents(index, start - buffer, end + buffer);
+      this.itemEvents = new Map(visible.map(item => [item.id, item]));
+      const colors = new Map();
+      const allCats = this.categorizedEvents?.length ? useCategoryStore().classes : [];
+      const items = visible.map(item => {
+        if (!resetWindow && this.preparedItems.has(item.id)) return this.preparedItems.get(item.id);
+        const categorized = item.bucket.id === CATEGORIZED_ROW;
+        const name = item.event.data.$category;
+        const color = categorized
+          ? getColorFromCategory(
+              allCats.find(c => _.isEqual(c.name, name)),
+              allCats
+            )
+          : getCategoryColorFromEvent(item.bucket, item.event);
+        if (!colors.has(color)) colors.set(color, Color(color).darken(0.3).toString());
+        return {
+          id: item.id,
+          group: item.bucket.id,
+          content: categorized ? name.join(' > ') : getTitleAttr(item.bucket, item.event),
+          start: item.start,
+          end: item.end,
+          style: `background-color: ${color}; border-color: ${colors.get(color)}`,
+          // Only with swimlanes: vis-timeline re-measures a subgroup on every
+          // item removed from it, which makes large removals quadratic.
+          subgroup:
+            this.swimlane && !categorized
+              ? getSwimlane(item.bucket, color, this.swimlane, item.event)
+              : undefined,
+        };
+      });
+
+      // Keep group rows stable while panning through gaps in a bucket's data.
+      this.preparedItems = new Map(items.map(item => [item.id, item]));
+      groups = groups.filter(group => index.groups.has(group.id));
+      if (this.queriedInterval && this.showQueriedInterval) {
+        groups.push({ id: 'queried-interval', content: 'queried interval' });
+        items.push({
+          id: 'queried-interval',
+          group: 'queried-interval',
+          content: 'query',
+          start: this.queriedInterval[0].valueOf(),
+          end: this.queriedInterval[1].valueOf(),
+          style: 'background-color: #aaa; height: 10px',
+        });
+      }
+      syncTimelineData(this.groupData, groups);
+      syncTimelineData(this.itemData, items);
+      this.renderedViewport = {
+        index,
+        width: end - start,
+        start: start - buffer * 0.8,
+        end: end + buffer * 0.8,
+      };
+      if (bounds) {
+        this.options.min = bounds[0];
+        this.options.max = bounds[1];
+        this.timeline.setOptions(this.options);
+      }
+      if (nextWindow) {
+        this.timeline.setWindow(nextWindow[0], nextWindow[1], { animation: false });
+      }
+      this.items = items;
+      this.groups = groups;
+    },
+  },
+};
+</script>

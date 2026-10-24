@@ -1,0 +1,292 @@
+<template lang="pug">
+div
+  b-row
+    b-col(cols="12", md="6").mb-2
+      b-form-group(:label="$t('ui.topBucket.bucket')")
+        b-form-select(
+          v-model="selectedBucketId",
+          :options="bucketOptions",
+          :disabled="bucketOptions.length === 0 || loading"
+        )
+    b-col(cols="12", md="6").mb-2
+      b-form-group
+        template(#label)
+          span {{ $t('ui.topBucket.field') }}
+          span.info-icon(
+            :title="$t('ui.topBucket.fieldHelp')"
+          ) i
+        b-form-select(
+          v-model="selectedField",
+          :options="fieldSelectOptions",
+          :disabled="!selectedBucketId || loading"
+        )
+        b-form-input.mt-2(
+          v-if="selectedField === '__custom' || fieldOptions.length === 0",
+          v-model="customField",
+          :placeholder="$t('ui.topBucket.fieldPlaceholder')",
+          :disabled="loading"
+        )
+  b-alert.mt-2(v-if="error", :model-value="true", variant="danger") {{ error }}
+  b-alert.mt-2(v-else-if="!selectedBucketId" :model-value="true" variant="info")
+    | {{ $t('ui.topBucket.selectWatcher') }}
+  b-alert.mt-2(v-else-if="!loading && aggregated.length === 0" :model-value="true" variant="warning")
+    | {{ $t('ui.topBucket.noEvents') }}
+
+  div.mt-2
+    div.text-center.py-4(v-if="loading")
+      b-spinner(small type="grow" :label="$t('common.loading')")
+      span.ms-2 {{ $t('ui.topBucket.loadingEvents') }}
+    aw-summary(
+      v-else-if="aggregated.length",
+      :fields="aggregated",
+      :namefunc="namefunc",
+      :hoverfunc="hoverfunc",
+      :colorfunc="colorfunc",
+      with_limit
+    )
+    div.text-muted.text-center.py-4(v-else)
+      | {{ $t('ui.topBucket.pickField') }}
+</template>
+
+<script lang="ts">
+import _ from 'lodash';
+import moment from 'moment';
+import { earliestEventInBucket, rangeCoveringEarliest } from '~/util/earliestEvent';
+import { useActivityStore } from '~/stores/activity';
+import { useBucketsStore } from '~/stores/buckets';
+import { getClient } from '~/util/awclient';
+interface AggregatedEvent {
+  duration: number;
+  data: Record<string, any>;
+}
+function formatValue(value: unknown): string {
+  if (Array.isArray(value)) return value.join(' > ');
+  if (value === null || value === undefined) return 'Unknown';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+export default {
+  name: 'aw-top-bucket-data',
+  props: {
+    initialBucketId: { type: String, default: '' },
+    initialField: { type: String, default: '' },
+    initialCustomField: { type: String, default: '' },
+  },
+  data() {
+    return {
+      bucketsStore: useBucketsStore(),
+      activityStore: useActivityStore(),
+      selectedBucketId: this.initialBucketId || '',
+      selectedField: this.initialField || '',
+      customField: this.initialCustomField || '',
+      fieldOptions: [] as string[],
+      events: [] as any[],
+      aggregated: [] as AggregatedEvent[],
+      // bucket id -> earliest event, for All time (see queryRange)
+      earliestByBucket: {} as Record<string, Date | null>,
+      loading: false,
+      error: '',
+    };
+  },
+  computed: {
+    bucketOptions(): { value: string; text: string }[] {
+      return this.bucketsStore.buckets.map(b => ({
+        value: b.id,
+        text: `${b.id} (${b.type || this.$t('common.unknown')})`,
+      }));
+    },
+    fieldSelectOptions(): { value: string; text: string }[] {
+      const options = this.fieldOptions.map(f => ({ value: f, text: f }));
+      options.push({ value: '__custom', text: this.$t('ui.topBucket.customField') });
+      return options;
+    },
+    selectedFieldValue(): string {
+      if (this.selectedField === '__custom') return this.customField;
+      return this.selectedField;
+    },
+    timeRange(): { start: string; end: string } | null {
+      const opts = this.activityStore.query_options;
+      if (!opts || !opts.timeperiod) return null;
+      const start = opts.timeperiod.start;
+      const end = moment(start)
+        .add(...opts.timeperiod.length)
+        .toISOString();
+      return { start, end };
+    },
+    namefunc(): (e: AggregatedEvent) => string {
+      return e => e.data.display;
+    },
+    hoverfunc(): (e: AggregatedEvent) => string {
+      return e => e.data.display;
+    },
+    colorfunc(): (e: AggregatedEvent) => string {
+      return e => e.data.colorKey;
+    },
+  },
+  watch: {
+    selectedBucketId: function () {
+      this.emitSelection();
+      // Drop the cached earliest for the newly selected bucket: it may have
+      // gained older events since it was last viewed (an import while the page
+      // stayed open), and a plain switch should reflect that without a Refresh.
+      const rest = { ...this.earliestByBucket };
+      delete rest[this.selectedBucketId];
+      this.earliestByBucket = rest;
+      this.loadEvents();
+    },
+    selectedField: function () {
+      this.emitSelection();
+      this.aggregate();
+    },
+    customField: function () {
+      if (this.selectedField === '__custom') {
+        this.emitSelection();
+        this.aggregate();
+      }
+    },
+    timeRange() {
+      this.loadEvents();
+    },
+  },
+  async mounted() {
+    await this.bucketsStore.ensureLoaded();
+    this.setDefaultBucket();
+    this.emitSelection();
+    if (this.selectedBucketId) {
+      await this.loadEvents();
+    }
+  },
+  methods: {
+    setDefaultBucket() {
+      if (this.selectedBucketId) return;
+      const host = this.activityStore.query_options && this.activityStore.query_options.host;
+      const byHost = host ? this.bucketsStore.buckets.filter(b => b.hostname === host) : [];
+      if (byHost.length > 0) {
+        this.selectedBucketId = byHost[0].id;
+      } else if (this.bucketsStore.buckets.length > 0) {
+        this.selectedBucketId = this.bucketsStore.buckets[0].id;
+      }
+    },
+    // The shared range, widened for All time to the selected bucket's own
+    // earliest event: the All time start only considers the host's standard
+    // buckets, so e.g. an older imported bucket would otherwise be cut off.
+    async queryRange(bucketId: string): Promise<{ start: string; end: string } | null> {
+      const range = this.timeRange;
+      const opts = this.activityStore.query_options;
+      if (!range || !opts || !opts.all_time) return range;
+      // A forced refresh must re-check the bucket's earliest event, so events
+      // imported while the page stayed open are not left out of All time.
+      if (opts.force || !(bucketId in this.earliestByBucket)) {
+        const bucket = this.bucketsStore.getBucket(bucketId);
+        // A miss (store still loading, or restored initialBucketId not in
+        // the list yet) must not poison the cache with null — Refresh would
+        // then be the only retry. Empty buckets still cache null below.
+        if (!bucket) {
+          return range;
+        }
+        const client = getClient();
+        const earliest = await earliestEventInBucket(bucket, (id, params) =>
+          client.getEvents(id, params)
+        );
+        this.earliestByBucket = { ...this.earliestByBucket, [bucketId]: earliest };
+      }
+      return rangeCoveringEarliest(range, this.earliestByBucket[bucketId]);
+    },
+    async loadEvents() {
+      // Capture the bucket at call time: the earliest-event lookup below can
+      // await, and the selectedBucketId watcher may fire a newer loadEvents in
+      // the meantime. Reusing the captured id keeps the widened range and the
+      // fetched events in agreement, and drops this run if it was superseded.
+      const bucketId = this.selectedBucketId;
+      if (!bucketId || !this.timeRange) return;
+      this.loading = true;
+      this.error = '';
+      this.aggregated = [];
+      try {
+        const range = await this.queryRange(bucketId);
+        if (!range || bucketId !== this.selectedBucketId) return;
+        this.events = await getClient().getEvents(bucketId, {
+          start: range.start,
+          end: range.end,
+          limit: -1,
+        });
+        if (bucketId !== this.selectedBucketId) return;
+        this.fieldOptions = this.extractFields(this.events);
+        if (!this.selectedField && this.fieldOptions.length > 0) {
+          this.selectedField = this.fieldOptions[0];
+        } else if (!this.selectedField && this.fieldOptions.length === 0) {
+          this.selectedField = '__custom';
+        }
+        this.aggregate();
+      } catch (err) {
+        console.error(err);
+        // A superseded run must not clobber the results of a newer one.
+        if (bucketId !== this.selectedBucketId) return;
+        this.events = [];
+        this.fieldOptions = [];
+        this.error = err?.message || this.$t('ui.topBucket.loadError');
+      } finally {
+        // Only clear the spinner for the run that is still the selected bucket;
+        // a superseded run must not hide a newer in-flight load.
+        if (bucketId === this.selectedBucketId) this.loading = false;
+      }
+    },
+    extractFields(events: any[]): string[] {
+      // Sample first 100 events for field discovery (performance vs coverage tradeoff)
+      const keys = new Set<string>();
+      events.slice(0, 100).forEach(e => {
+        Object.keys(e.data || {}).forEach(k => keys.add(k));
+      });
+      return Array.from(keys).sort();
+    },
+    aggregate() {
+      const fieldValue = (this.selectedFieldValue || '').trim();
+      if (!fieldValue) {
+        this.aggregated = [];
+        return;
+      }
+      // Even though the user should start the manual data fields with "data", we want
+      // to gracefully let it pass. Chances are there are no nested data.data.title.
+      const path = fieldValue.startsWith('data.') ? fieldValue : `data.${fieldValue}`;
+      const grouped = new Map<string, AggregatedEvent>();
+      this.events.forEach(e => {
+        const value = _.get(e, path);
+        const display = formatValue(value);
+        const key = Array.isArray(value) ? JSON.stringify(value) : String(display);
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            duration: 0,
+            data: { display, raw: value, colorKey: display },
+          });
+        }
+        const entry = grouped.get(key);
+        entry.duration += e.duration || 0;
+      });
+      this.aggregated = Array.from(grouped.values()).sort((a, b) => b.duration - a.duration);
+    },
+    emitSelection() {
+      this.$emit('update-props', {
+        bucketId: this.selectedBucketId,
+        field: this.selectedField === '__custom' ? '__custom' : this.selectedField,
+        customField: this.selectedField === '__custom' ? this.customField : '',
+      });
+    },
+  },
+};
+</script>
+
+<style scoped>
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.25rem;
+  width: 1.15em;
+  height: 1.15em;
+  border: 1px solid #888;
+  border-radius: 50%;
+  font-size: 0.75em;
+  color: #555;
+  cursor: help;
+}
+</style>
