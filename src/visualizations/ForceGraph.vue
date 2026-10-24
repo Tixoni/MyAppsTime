@@ -4,13 +4,14 @@ div#forcegraph
 
 <style>
 #forcegraph > svg {
-  border: 1px solid #555;
+  border: var(--bs-border-width) solid var(--bs-border-color);
   box-sizing: border-box;
 }
 </style>
 
 <script lang="ts">
 import * as d3 from 'd3';
+import * as theme from '~/style/theme';
 
 export default {
   name: 'ForceGraph',
@@ -112,14 +113,14 @@ function ForceGraph(
     nodeGroups = undefined, // an array of ordinal values representing the node groups
     nodeTitle = null, // given d in nodes, a title string
     nodeFill = 'currentColor', // node stroke fill (if not using a group color encoding)
-    nodeStroke = '#fff', // node stroke color
+    nodeStroke = 'var(--aw-surface)', // node stroke color
     nodeStrokeWidth = 1.5, // node stroke width, in pixels
     nodeStrokeOpacity = 1, // node stroke opacity
     nodeRadius = 4, // node radius, in pixels
     nodeStrength = undefined,
     linkSource = ({ source }) => source, // given d in links, returns a node identifier string
     linkTarget = ({ target }) => target, // given d in links, returns a node identifier string
-    linkStroke = '#999', // link stroke color
+    linkStroke = theme.chart.line, // link stroke color
     linkStrokeOpacity = 0.6, // link stroke opacity
     linkStrokeWidth = d => 1.5 * Math.sqrt(d.value), // given d in links, returns a stroke width in pixels
     linkStrokeLinecap = 'round', // link stroke linecap
@@ -205,7 +206,7 @@ function ForceGraph(
   const node = svg
     .append('g')
     .attr('fill', nodeFill)
-    .attr('stroke', nodeStroke)
+    .style('stroke', nodeStroke)
     .attr('stroke-opacity', nodeStrokeOpacity)
     .attr('stroke-width', nodeStrokeWidth)
     .selectAll('circle')

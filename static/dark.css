@@ -1,6 +1,6 @@
 /* Dark mode for the parts Bootstrap's color mode (data-bs-theme="dark") does not
    reach: D3 and vis-timeline charts, inline-styled elements and the phone drawer.
-   Colors come from the theme variables in src/style/bootstrap.scss. */
+   Colors come from the theme (src/style/theme.ts) through CSS variables. */
 
 /* Phone navigation drawer: the offcanvas has .bg-white */
 .aw-nav-drawer.offcanvas {
@@ -27,20 +27,12 @@ svg {
 /* D3 charts draw labels and some fills with fixed light-mode colors */
 svg text {
   fill: var(--bs-body-color) !important;
-  text-shadow: #000 0.5px 0.5px 0.5px;
+  text-shadow: var(--bs-body-bg) 0.5px 0.5px 0.5px;
 }
 
 svg#timespiral text,
 svg#timespiral textPath {
   fill: var(--bs-secondary-color) !important;
-}
-
-svg.appsummary g rect[style="fill: rgb(204, 204, 204);"] {
-  fill: #5a5957 !important;
-}
-
-svg.appsummary g rect[style="fill: rgb(184, 184, 184);"] {
-  fill: #42423f !important;
 }
 
 svg path[style="fill: rgb(255, 255, 255);"] {

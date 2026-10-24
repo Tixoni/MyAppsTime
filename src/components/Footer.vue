@@ -14,7 +14,7 @@ div.container.text-body-secondary(style="font-size: 0.9em")
           b {{ $t('footer.version') }}
           | &nbsp; {{info.version}}
 
-  div(style="font-size: 0.9em; opacity: 0.8; fill: #88F")
+  div(style="font-size: 0.9em; opacity: 0.8; fill: var(--bs-secondary-color)")
     div.float-none.float-md-end.my-2
       a(href="https://github.com/ActivityWatch/activitywatch/issues/new/choose", target="_blank" rel="noopener noreferrer").me-3
         icon(name="bug")

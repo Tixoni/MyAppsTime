@@ -4,6 +4,7 @@ import { split_by_hour_into_data } from '~/util/transforms';
 import { getColorFromCategory } from '~/util/color';
 import { Category } from '~/util/classes';
 import { IEvent } from './interfaces';
+import * as theme from '~/style/theme';
 
 interface HourlyData {
   cat_events: IEvent[];
@@ -52,7 +53,7 @@ export function buildBarchartDatasetActive(events_active: IEvent[]) {
   return [
     {
       label: 'Total time',
-      backgroundColor: '#6699ff',
+      backgroundColor: theme.accent.info,
       data,
     },
   ];

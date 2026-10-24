@@ -2,6 +2,7 @@ import path from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
+import { scssVariables } from './src/style/theme';
 
 export default defineConfig(({ mode }) => {
   const PRODUCTION = mode === 'production';
@@ -108,7 +109,11 @@ export default defineConfig(({ mode }) => {
     css: {
       preprocessorOptions: {
         // Bootstrap 5.3's SCSS (style/bootstrap.scss) still uses these deprecated Sass features
-        scss: { silenceDeprecations: ['import', 'global-builtin', 'color-functions', 'if-function'] },
+        scss: {
+          silenceDeprecations: ['import', 'global-builtin', 'color-functions', 'if-function'],
+          // The theme colors (src/style/theme.ts) as $aw-* variables in every stylesheet
+          additionalData: scssVariables(),
+        },
       },
     },
     publicDir: './static',

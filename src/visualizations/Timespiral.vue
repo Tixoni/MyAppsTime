@@ -17,6 +17,7 @@ import * as d3 from 'd3';
 import { PieArcDatum } from 'd3-shape';
 import moment from 'moment';
 import { IEvent } from '~/util/interfaces';
+import * as theme from '~/style/theme';
 
 function split_events_on_hours(events: IEvent[]): IEvent[] {
   // Takes a list of events, finds events that crosses hour-boundaries (e.g. 01:00, or 23:00)
@@ -295,12 +296,12 @@ export default {
           // NOTE: Attempted rotation around a pivot point, doesn't work
           //.attr('transform', `rotate(-5 ${x} ${y})`)
           // TODO: Colors should come from events (retrievable by query), not hardcoded
-          .attr('fill', e.data.status == 'not-afk' ? '#0d0' : '#ccc')
+          .attr('fill', e.data.status == 'not-afk' ? theme.afkStatus.notAfk : theme.afkStatus.afk)
           .attr('opacity', 0.7);
       });
 
-      const labelColor = '#888';
-      const tickColor = '#ccc';
+      const labelColor = theme.chart.text;
+      const tickColor = theme.chart.line;
 
       // Draw clock ticks
       // Modified from sunburst-clock.js
@@ -328,7 +329,7 @@ export default {
             .attr('y1', 0)
             .attr('x2', (radius - 5) * xn)
             .attr('y2', (radius - 5) * yn)
-            .style('stroke', '#fff')
+            .style('stroke', 'var(--aw-surface)')
             .style('stroke-width', 2);
       }
 
@@ -386,7 +387,7 @@ export default {
           .attr('d', path) //SVG path
           //.attr('d', 'M 0,-100 A 100,100 0 0 1 110,0') //SVG path
           .style('fill', 'none')
-          .style('stroke', '#AAAAAA')
+          .style('stroke', theme.chart.line)
           .style('stroke-width', 0);
 
         group
@@ -398,7 +399,7 @@ export default {
           //.attr('dominant-baseline', 'middle')
           .attr('font-size', `${1 * Math.max(thickScale(m) / thickness, 0.5)}em`)
           //.attr('text-decoration', 'underline');
-          .style('fill', '#555');
+          .style('fill', theme.chart.text);
       }
 
       const date_labels = d3.timeDays(...domain);
@@ -421,7 +422,7 @@ export default {
         group
           .append('polyline')
           .attr('points', points.join(' '))
-          .attr('stroke', '#ccc')
+          .attr('stroke', theme.chart.line)
           .attr('stroke-width', 1)
           .attr('fill', 'none');
       }

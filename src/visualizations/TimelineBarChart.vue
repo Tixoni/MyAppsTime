@@ -5,9 +5,9 @@ div(v-if="datasets && datasets.length > 0")
   // Height set here to avoid elements jumping when loading Activity view
   div(:style="{ position: 'relative', height: height + 'px' }")
     bar(:data="chartData" :options="chartOptions")
-div.small(v-else-if="datasets === null", style="font-size: 16pt; color: #aaa;")
+div.small.text-body-secondary(v-else-if="datasets === null", style="font-size: 16pt;")
   | {{ $t('visualizations.noData') }}
-div.small(v-else, style="font-size: 16pt; color: #aaa;")
+div.small.text-body-secondary(v-else, style="font-size: 16pt;")
   .aw-loading {{ $t('common.loading') }}
 </template>
 
@@ -29,6 +29,7 @@ import {
 } from '~/util/timeperiod';
 import { getAppLocale, i18n } from '~/i18n';
 import { clampStackedHours } from '~/util/timelineClamp';
+import * as theme from '~/style/theme';
 
 function hourToTick(hours: number): string {
   if (hours > 1) {
@@ -53,7 +54,7 @@ export default {
       default: () => [
         {
           label: i18n.global.t('ui.timeline.totalTime'),
-          backgroundColor: '#6699ff',
+          backgroundColor: theme.accent.info,
           data: Array.from({ length: 40 }, () => Math.floor(Math.random() * 40)),
         },
       ],

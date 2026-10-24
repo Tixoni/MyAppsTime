@@ -1,5 +1,5 @@
 <template lang="pug">
-div(v-if="show", style="border: 1px solid #aaa; border-radius: 5px")
+div(v-if="show", style="border: var(--bs-border-width) solid var(--bs-border-color); border-radius: var(--bs-border-radius)")
   b-alert(v-if="note", variant="warning" :model-value="true")
     span.float-start {{ $t('ui.devOnly.notProduction') }} #[span(v-if="reason") ({{ reason }})]
     b-button.float-end.hide-devonly(@click="() => { hide = true }", variant="outline-secondary", size="sm")

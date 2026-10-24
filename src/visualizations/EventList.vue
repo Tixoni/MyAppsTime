@@ -66,7 +66,7 @@ $border-color: var(--bs-border-color);
 
   li {
     border: 0 solid $border-color;
-    border-width: 0 0 1px 0;
+    border-width: 0 0 var(--bs-border-width) 0;
     border-radius: 4px;
     padding: 2px;
 
@@ -97,7 +97,7 @@ $border-color: var(--bs-border-color);
   font-size: 11pt;
   padding: 3px 5px 3px 5px;
   background-color: var(--bs-secondary-bg);
-  border: 1px solid var(--bs-border-color);
+  border: var(--bs-border-width) solid var(--bs-border-color);
   border-radius: var(--bs-border-radius-sm);
 
   &:last-child {

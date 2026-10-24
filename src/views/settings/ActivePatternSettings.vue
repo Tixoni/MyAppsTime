@@ -11,7 +11,7 @@ div
         |
         span.text-nowrap
           | {{ $t('settings.activePattern.example') }}&nbsp;
-          code(style="background-color: rgba(200, 200, 200, 0.3); padding: 2px 4px; border-radius: 2px;")
+          code
             | Zoom Meeting|Google Meet|Microsoft Teams
     div
       b-form-input(size="sm" v-model="always_active_pattern_editing" :state="(enabled || null) && valid")

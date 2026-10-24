@@ -271,7 +271,7 @@ div
 }
 
 .nav {
-  border-bottom: 1px solid $lightBorderColor;
+  border-bottom: var(--bs-border-width) solid $lightBorderColor;
 
   .nav-item {
     margin-bottom: 0px;

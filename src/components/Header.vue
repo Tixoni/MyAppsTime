@@ -29,7 +29,7 @@ mixin navMain
         icon(name="layer-group")
         | {{ $t('activity.allDevices') }}
 
-  b-nav-item(to="/timeline" style="font-color: #000;")
+  b-nav-item(to="/timeline")
     div.px-2.px-lg-1
       icon(name="stream")
       | {{ $t('nav.timeline') }}
@@ -313,7 +313,7 @@ export default {
 .aw-navbar {
   background-color: var(--bs-body-bg);
   border: solid $lightBorderColor;
-  border-width: 0 0 1px 0;
+  border-width: 0 0 var(--bs-border-width) 0;
 }
 
 .nav-item {

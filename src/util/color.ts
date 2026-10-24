@@ -1,16 +1,16 @@
 import _ from 'lodash';
 import { Category, matchString, loadClasses } from './classes';
-import Color from 'color';
 import * as d3 from 'd3';
+import * as theme from '~/style/theme';
 import { IEvent, IBucket } from './interfaces';
 
 // See here for examples:
 //   https://bl.ocks.org/pstuffa/3393ff2711a53975040077b7453781a9
 //
 
-const COLOR_UNCAT = '#CCC';
+const COLOR_UNCAT = theme.categories.uncategorized;
 
-const scale = d3.scaleOrdinal(['#90CAF9', '#FFE082', '#EF9A9A', '#A5D6A7']);
+const scale = d3.scaleOrdinal(theme.palette);
 
 // Needed to prewarm the color table
 scale.domain(
@@ -18,33 +18,10 @@ scale.domain(
 );
 
 const customColors = {
-  afk: '#EEE',
-  'not-afk': '#7F6',
-  hibernating: '#DD6',
-
-  'google-chrome': '#6AA7FE', // Google Blue: "#4885ed"
-  chromium: '#8CF', // Google Blue: "#4885ed"
-  firefox: '#F94', // Firefox Orange: "#E55B0A"
-  spotify: '#5FA', // Spotify Green: "#1ED760"
-  alacritty: '#FD8',
-
-  vue: '#5d9', // Vue teal #4fc08d
-  python: '#369', // Python blue #2b5b84
-  javascript: '#f6b', // JavaScript pink #eb47a5
-
-  // Developer domains
-  localhost: '#CCC',
-  'github.com': '#EBF',
-  'stackoverflow.com': Color('#F48024').lighten(0.3),
-
-  'google.com': '#0AF',
-  'google.se': '#0AF',
-
-  // Social media sites
-  'messenger.com': Color('#3b5998').lighten(0.5),
-  'facebook.com': Color('#3b5998').lighten(0.5),
-
-  // Categories
+  afk: theme.afkStatus.afk,
+  'not-afk': theme.afkStatus.notAfk,
+  hibernating: theme.afkStatus.hibernating,
+  ...theme.apps,
   uncategorized: COLOR_UNCAT,
 };
 

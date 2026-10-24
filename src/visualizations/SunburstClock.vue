@@ -49,7 +49,7 @@ div.sunburst
   .sequence text,
   .legend text {
     font-weight: 600;
-    fill: #fff;
+    fill: $aw-chart-on-bar-light;
   }
 
   .chart {
@@ -57,7 +57,7 @@ div.sunburst
   }
 
   .chart path {
-    stroke: #fff;
+    stroke: var(--aw-surface);
   }
 
   .explanation {
@@ -66,11 +66,11 @@ div.sunburst
     left: 305px;
     width: 140px;
     text-align: center;
-    color: #666;
+    color: var(--bs-secondary-color);
     z-index: 10; // might not be needed
 
     .base {
-      color: #ddd;
+      color: var(--bs-secondary-color);
       font-size: 2em;
     }
 

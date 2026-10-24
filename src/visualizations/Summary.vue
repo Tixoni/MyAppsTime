@@ -12,7 +12,7 @@ div
 
 <style scoped lang="scss">
 .aw-summary-container > svg {
-  border: 1px solid #999;
+  border: var(--bs-border-width) solid var(--bs-border-color);
   border-radius: 0.5em;
 }
 </style>

@@ -2,6 +2,7 @@ import _ from 'lodash';
 import { IEvent } from './interfaces';
 import { useSettingsStore } from '~/stores/settings';
 import { getPresetCategorySets } from '~/util/presetCategories';
+import * as theme from '~/style/theme';
 
 const level_sep = '>';
 export const CLASSIFY_KEYS = ['app', 'title'] as const;
@@ -77,7 +78,7 @@ export function mergeCategorySets(sets: CategorySet[]): Category[] {
   return merged;
 }
 
-const COLOR_UNCAT = '#CCC';
+const COLOR_UNCAT = theme.categories.uncategorized;
 
 // Colors the default categories had before the palette was softened (#1058).
 // First-run `settings.save()` persists the install defaults, so everyone who
@@ -102,7 +103,7 @@ export const defaultCategories: Category[] = [
   {
     name: ['Work'],
     rule: { type: 'regex', regex: 'Google Docs|libreoffice|ReText' },
-    data: { color: '#4ADE80', score: 10 },
+    data: { color: theme.categories.work, score: 10 },
   },
   {
     name: ['Work', 'Programming'],
@@ -122,17 +123,17 @@ export const defaultCategories: Category[] = [
   {
     name: ['Media'],
     rule: { type: 'none' },
-    data: { color: '#F87171' },
+    data: { color: theme.categories.media },
   },
   {
     name: ['Media', 'Games'],
     rule: { type: 'regex', regex: 'Minecraft|RimWorld' },
-    data: { color: '#FB923C' },
+    data: { color: theme.categories.games },
   },
   {
     name: ['Media', 'Video'],
     rule: { type: 'regex', regex: 'YouTube|Plex|VLC' },
-    data: { color: '#F87171' },
+    data: { color: theme.categories.video },
   },
   {
     name: ['Media', 'Social Media'],
@@ -141,7 +142,7 @@ export const defaultCategories: Category[] = [
       regex: 'reddit|Facebook|Twitter|Instagram|devRant',
       ignore_case: true,
     },
-    data: { color: '#FACC15' },
+    data: { color: theme.categories.socialMedia },
   },
   {
     name: ['Media', 'Music'],
@@ -150,12 +151,12 @@ export const defaultCategories: Category[] = [
       regex: 'Spotify|Deezer',
       ignore_case: true,
     },
-    data: { color: '#A3E635' },
+    data: { color: theme.categories.music },
   },
   {
     name: ['Comms'],
     rule: { type: 'none' },
-    data: { color: '#67E8F9' },
+    data: { color: theme.categories.comms },
   },
   {
     name: ['Comms', 'IM'],

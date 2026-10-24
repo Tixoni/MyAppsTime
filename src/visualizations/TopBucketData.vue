@@ -283,7 +283,7 @@ export default {
   margin-left: 0.25rem;
   width: 1.15em;
   height: 1.15em;
-  border: 1px solid var(--bs-secondary-color);
+  border: var(--bs-border-width) solid var(--bs-secondary-color);
   border-radius: 50%;
   font-size: 0.75em;
   color: var(--bs-secondary-color);

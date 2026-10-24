@@ -191,7 +191,7 @@ div
 .bucket-row {
   display: flex;
   align-items: center;
-  border-top: 1px solid var(--bs-border-color);
+  border-top: var(--bs-border-width) solid var(--bs-border-color);
 }
 
 .bucket-row:hover {

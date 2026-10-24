@@ -4,6 +4,7 @@ import moment from 'moment';
 
 import { seconds_to_duration } from '../util/time.ts';
 import { TimePeriod, timeperiodToStr } from '../util/timeperiod';
+import * as theme from '../style/theme';
 import { IEvent } from '../util/interfaces';
 
 function create(svg_elem: SVGElement) {
@@ -24,12 +25,12 @@ function set_status(svg_elem: SVGElement, msg: string) {
     .attr('font-family', 'sans-serif')
     .attr('font-size', '20pt')
     .attr('text-anchor', 'middle')
-    .attr('fill', '#AAA');
+    .attr('fill', theme.chart.text);
 }
 
-const diagramcolor = '#aaa';
-const diagramcolor_selected = '#fc5';
-const diagramcolor_focused = '#adf';
+const diagramcolor = theme.chart.neutral;
+const diagramcolor_selected = theme.chart.selected;
+const diagramcolor_focused = theme.chart.focused;
 
 function update(
   svg_elem: SVGElement,

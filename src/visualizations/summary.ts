@@ -8,9 +8,10 @@ import { useCategoryStore } from '~/stores/categories';
 import { getCategoryColorFromString } from '~/util/color';
 import { seconds_to_duration } from '~/util/time';
 import { IEvent } from '~/util/interfaces';
+import * as theme from '~/style/theme';
 
-const textColor = '#333';
-const durationColor = '#444';
+const textColor = theme.chart.onBarDark;
+const durationColor = theme.chart.onBarDarkMuted;
 
 // Unique per-chart prefix for clipPath ids (several summaries can share a page).
 let chartCounter = 0;
@@ -20,9 +21,9 @@ let chartCounter = 0;
 // light bars get dark labels, in both light and dark theme.
 function inBarColors(barColor: string): { name: string; duration: string } {
   const bar = Color(barColor);
-  return bar.contrast(Color(textColor)) >= bar.contrast(Color('#fff'))
+  return bar.contrast(Color(textColor)) >= bar.contrast(Color(theme.chart.onBarLight))
     ? { name: textColor, duration: textColor }
-    : { name: '#fff', duration: '#eee' };
+    : { name: theme.chart.onBarLight, duration: theme.chart.onBarLightMuted };
 }
 
 function create(container: HTMLElement) {
@@ -47,7 +48,7 @@ function set_status(container: HTMLElement, msg: string) {
     .text(msg)
     .attr('font-family', 'sans-serif')
     .attr('font-size', '20px')
-    .attr('fill', '#999');
+    .attr('fill', theme.chart.text);
 }
 
 interface Entry {

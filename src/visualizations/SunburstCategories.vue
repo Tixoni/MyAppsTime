@@ -36,6 +36,7 @@ div.sunburst(ref="container", @mouseleave="hovered = null")
 import { markRaw } from 'vue';
 import { arc, hierarchy, interpolate, partition, scaleLinear, scaleSqrt, timer } from 'd3';
 import { getColorFromCategory } from '~/util/color';
+import { ui } from '~/style/theme';
 import { fitLabel, measureText } from '~/util/sunburstLabels';
 import { friendlyduration } from '~/util/filters';
 
@@ -204,7 +205,7 @@ export default {
       if (s == 'All') {
         const theme = useSettingsStore().theme;
         const resolved = theme === 'auto' ? (isDarkThemeApplied() ? 'dark' : 'light') : theme;
-        return resolved === 'dark' ? '#333' : '#fff';
+        return resolved === 'dark' ? ui.dark.surface : ui.light.surface;
       }
 
       const categoryStore = useCategoryStore();
@@ -272,8 +273,8 @@ export default {
 
 .sunburst-arc {
   cursor: pointer;
-  stroke: #fff;
-  stroke-width: 0.5px;
+  stroke: var(--aw-surface);
+  stroke-width: 1px;
   transition: fill-opacity 0.1s;
 }
 

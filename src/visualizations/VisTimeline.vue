@@ -89,6 +89,7 @@ import { formatTimelineBucketLabelHtml, shortenBucketLabel } from '../util/timel
 import { Timeline } from 'vis-timeline/esnext';
 import 'vis-timeline/styles/vis-timeline-graph2d.css';
 import EventEditor from '~/components/EventEditor.vue';
+import * as theme from '~/style/theme';
 
 const PIXELS_PER_WHEEL_LINE = 40;
 // Group id of the derived category row; its events are not editable.
@@ -506,7 +507,7 @@ export default {
           content: 'query',
           start: this.queriedInterval[0].valueOf(),
           end: this.queriedInterval[1].valueOf(),
-          style: 'background-color: #aaa; height: 10px',
+          style: `background-color: ${theme.chart.neutral}; height: 10px`,
         });
       }
       syncTimelineData(this.groupData, groups);

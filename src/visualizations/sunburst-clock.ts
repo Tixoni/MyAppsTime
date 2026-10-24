@@ -21,6 +21,7 @@ import { IEvent } from '~/util/interfaces';
 
 import { seconds_to_duration } from '../util/time';
 import { getColorFromString } from '~/util/color';
+import * as theme from '~/style/theme';
 
 // Dimensions of sunburst.
 const width = 750;
@@ -97,7 +98,7 @@ function drawClockTick(a: number) {
     .attr('y1', 170 * yn)
     .attr('x2', 155 * xn)
     .attr('y2', 155 * yn)
-    .style('stroke', '#CCC')
+    .style('stroke', theme.chart.line)
     .style('stroke-width', 1);
 }
 
@@ -114,7 +115,7 @@ function drawClock(h: number, m: number, text?: string) {
     .attr('text-anchor', 'middle')
     .attr('font-size', '1.2em')
     //.attr("font-weight", "bold")
-    .style('fill', '#999')
+    .style('fill', theme.chart.text)
     .attr('x', 130 * xn)
     .attr('y', 5 + 140 * yn);
 }
@@ -190,7 +191,7 @@ function initializeBreadcrumbTrail() {
     .attr('height', 50)
     .attr('id', 'trail');
   // Add the label at the end, for the percentage.
-  trail.append('svg:text').attr('id', 'endlabel').style('fill', '#000');
+  trail.append('svg:text').attr('id', 'endlabel').style('fill', 'var(--bs-body-color)');
 }
 
 function create(el: HTMLElement) {

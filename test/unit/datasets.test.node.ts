@@ -1,6 +1,9 @@
 import { buildBarchartDataset } from '~/util/datasets';
 import { Category } from '~/util/classes';
 import { IEvent } from '~/util/interfaces';
+import { categories } from '~/style/theme';
+
+const UNCAT = categories.uncategorized;
 
 const event = (path: string[] | undefined, duration: number): IEvent => ({
   timestamp: '2026-09-10T10:00:00Z',
@@ -29,10 +32,10 @@ test('preserves missing paths, distinct separator-containing paths, and every pe
   const datasets = buildBarchartDataset(periods, classes);
   expect(datasets).toEqual([
     { label: 'Known > Child', backgroundColor: '#123456', data: [1, null] },
-    { label: 'Uncategorized', backgroundColor: '#CCC', data: [0.5, null] },
-    { label: 'Deleted > Child', backgroundColor: '#CCC', data: [0.25, 0.75] },
-    { label: 'A>>>B', backgroundColor: '#CCC', data: [0.1, null] },
-    { label: 'A > B', backgroundColor: '#CCC', data: [0.2, null] },
+    { label: 'Uncategorized', backgroundColor: UNCAT, data: [0.5, null] },
+    { label: 'Deleted > Child', backgroundColor: UNCAT, data: [0.25, 0.75] },
+    { label: 'A>>>B', backgroundColor: UNCAT, data: [0.1, null] },
+    { label: 'A > B', backgroundColor: UNCAT, data: [0.2, null] },
   ]);
   expect(JSON.stringify({ classes, periods })).toBe(before);
 });
@@ -40,7 +43,7 @@ test('preserves missing paths, distinct separator-containing paths, and every pe
 test('retains unclassified events and handles empty input', () => {
   expect(
     buildBarchartDataset([{ cat_events: [event([], 1800), event(undefined, 1800)] }], [])
-  ).toEqual([{ label: 'Uncategorized', backgroundColor: '#CCC', data: [1] }]);
+  ).toEqual([{ label: 'Uncategorized', backgroundColor: UNCAT, data: [1] }]);
   expect(buildBarchartDataset([], [])).toEqual([]);
   expect(buildBarchartDataset(null, [])).toEqual([]);
 });

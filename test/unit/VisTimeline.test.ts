@@ -16,6 +16,7 @@ import StopwatchEntryComponent from '~/components/StopwatchEntry.vue';
 import moment from 'moment';
 import { createPinia, setActivePinia } from 'pinia';
 import { DataSet } from 'vis-data';
+import { categories } from '~/style/theme';
 
 const DataSetUpdate = DataSet.prototype.update;
 
@@ -529,7 +530,7 @@ describe('derived category row (#700)', () => {
     const items = vm.itemData.get();
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ group: '__categorized__', content: 'Uncategorized' });
-    expect(items[0].style).toContain('#CCC');
+    expect(items[0].style).toContain(categories.uncategorized);
     expect(items[0].subgroup).toBeUndefined();
     expect(items[0].end - items[0].start).toBe(500);
   });

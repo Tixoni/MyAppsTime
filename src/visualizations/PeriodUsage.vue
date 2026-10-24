@@ -8,7 +8,7 @@ svg
 svg {
   width: 100%;
   height: 40pt;
-  border: 1px solid $lightBorderColor;
+  border: var(--bs-border-width) solid $lightBorderColor;
   border-radius: 0.5em;
 }
 </style>

@@ -25,7 +25,7 @@ div
 
 <style scoped lang="scss">
 .stopwatch-entry {
-  border-bottom: 1px solid var(--bs-border-color);
+  border-bottom: var(--bs-border-width) solid var(--bs-border-color);
 }
 
 .stopwatch-entry:hover {

@@ -19,8 +19,8 @@ div
   div(v-if="duplicateEvents !== null")
     details
       summary
-        icon.mx-2(name="check", style="color: #0C0", v-if="duplicateEvents.length === 0")
-        icon.mx-2(name="exclamation-triangle", style="color: #CC0", v-else)
+        icon.mx-2.text-success(name="check", v-if="duplicateEvents.length === 0")
+        icon.mx-2.text-warning(name="exclamation-triangle", v-else)
         | {{ $t('ui.bucketValidate.duplicates') }}: {{ duplicateEvents.length }}
       div.p-2
         p(v-if="duplicateEvents.length === 0")
@@ -35,8 +35,8 @@ div
   div(v-if="overlappingEvents !== null")
     details
       summary
-        icon.mx-2(name="check", style="color: #0C0", v-if="overlappingEvents.length === 0")
-        icon.mx-2(name="exclamation-triangle", style="color: #CC0", v-else)
+        icon.mx-2.text-success(name="check", v-if="overlappingEvents.length === 0")
+        icon.mx-2.text-warning(name="exclamation-triangle", v-else)
         | {{ $t('ui.bucketValidate.overlaps', { count: overlappingEvents.length }) }} {{ friendlyduration(overlapDuration / 1000) }}
       div.p-2
         p(v-if="overlappingEvents.length === 0")
@@ -55,8 +55,8 @@ div
   div(v-if="zeroDurationEvents !== null")
     details
       summary
-        icon.mx-2(name="check", style="color: #0C0", v-if="zeroDurationEvents.length === 0")
-        icon.mx-2(name="info-circle", style="color: #09F", v-else)
+        icon.mx-2.text-success(name="check", v-if="zeroDurationEvents.length === 0")
+        icon.mx-2.text-info(name="info-circle", v-else)
         | {{ $t('ui.bucketValidate.zeroDuration') }}: {{ zeroDurationEvents.length }}
       div.p-2
         p.ms-3(v-if="zeroDurationEvents.length === 0")

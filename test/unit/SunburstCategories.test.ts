@@ -4,6 +4,7 @@ import SunburstCategoriesComponent from '~/visualizations/SunburstCategories.vue
 import { useCategoryStore } from '~/stores/categories';
 import { useSettingsStore } from '~/stores/settings';
 import { DARK_THEME_HREF } from '~/util/theme';
+import { ui } from '~/style/theme';
 
 // Tests call Options API members directly, which the Vue constructor type doesn't expose.
 const SunburstCategories: any = SunburstCategoriesComponent;
@@ -76,15 +77,15 @@ describe('SunburstCategories', () => {
     afterEach(() => setDarkApplied(false));
 
     test('is light in light theme and dark in dark theme', () => {
-      expect(rootColor('light')).toBe('#fff');
-      expect(rootColor('dark')).toBe('#333');
+      expect(rootColor('light')).toBe(ui.light.surface);
+      expect(rootColor('dark')).toBe(ui.dark.surface);
     });
 
     test("follows the theme applied to the page when theme is 'auto'", () => {
       setDarkApplied(false);
-      expect(rootColor('auto')).toBe('#fff');
+      expect(rootColor('auto')).toBe(ui.light.surface);
       setDarkApplied(true);
-      expect(rootColor('auto')).toBe('#333');
+      expect(rootColor('auto')).toBe(ui.dark.surface);
     });
   });
 

@@ -56,7 +56,7 @@ div
       tbody
         tr(v-for="row in categoryRows" :key="row.key")
           td
-            span.badge.me-1(:style="{ background: '#6c757d', color: 'white' }") {{ row.depth > 0 ? '↳ ' : '' }}
+            span.badge.me-1.text-bg-secondary {{ row.depth > 0 ? '↳ ' : '' }}
             | {{ row.label }}
           td.text-end {{ formatHours(row.duration) }}
           td.text-end
