@@ -36,11 +36,11 @@ svg#timespiral textPath {
 }
 
 svg.appsummary g rect[style="fill: rgb(204, 204, 204);"] {
-  fill: #6b6a65 !important;
+  fill: #5a5957 !important;
 }
 
 svg.appsummary g rect[style="fill: rgb(184, 184, 184);"] {
-  fill: #575652 !important;
+  fill: #42423f !important;
 }
 
 svg path[style="fill: rgb(255, 255, 255);"] {
