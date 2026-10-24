@@ -52,6 +52,7 @@ export default {
 
         // Determine the actual theme to apply
         const detectedTheme = value === 'auto' ? detectPreferredTheme() : value;
+        document.documentElement.setAttribute('data-bs-theme', detectedTheme);
 
         // Apply newly set theme
         // Create Dark Theme Element

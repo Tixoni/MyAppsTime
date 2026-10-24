@@ -106,9 +106,9 @@ div
 
 .btn-group {
   input[type='radio']:checked + label {
-    background-color: #495057;
-    color: #fff;
-    border-color: #495057;
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+    border-color: var(--bs-primary-border-subtle);
   }
 }
 

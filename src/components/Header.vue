@@ -130,7 +130,7 @@ div(:class="{'fixed-top-padding': fixedTopMenu}")
     b-navbar-nav.d-block.d-lg-none
       b-navbar-brand(to="/" style="background-color: transparent;")
         img.aligh-middle(src="/logo.png" style="height: 1.5em;")
-        span.ms-2.align-middle(style="font-size: 1em; color: #000;") {{ $t('app.name') }}
+        span.ms-2.align-middle(style="font-size: 1em;") {{ $t('app.name') }}
         b-badge.ms-2.align-middle(v-if="researchEdition" variant="info" data-testid="research-edition-badge") {{ $t('app.researchEdition') }}
 
     // Opens the drawer. Not a `target` toggle: the lazy offcanvas has no
@@ -151,7 +151,7 @@ div(:class="{'fixed-top-padding': fixedTopMenu}")
       b-navbar-nav.abs-center.d-none.d-lg-block
         b-navbar-brand(to="/" style="background-color: transparent;")
           img.ms-0.aligh-middle(src="/logo.png" style="height: 1.5em;")
-          span.ms-2.align-middle(style="font-size: 1.0em; color: #000;") {{ $t('app.name') }}
+          span.ms-2.align-middle(style="font-size: 1.0em;") {{ $t('app.name') }}
           b-badge.ms-2.align-middle(v-if="researchEdition" variant="info" data-testid="research-edition-badge") {{ $t('app.researchEdition') }}
 
       b-navbar-nav.ms-auto
@@ -311,7 +311,7 @@ export default {
 @import '../style/globals';
 
 .aw-navbar {
-  background-color: white;
+  background-color: var(--bs-body-bg);
   border: solid $lightBorderColor;
   border-width: 0 0 1px 0;
 }
@@ -324,7 +324,7 @@ export default {
   border-radius: 0.5em;
 
   &:hover {
-    background-color: #ddd;
+    background-color: var(--bs-secondary-bg);
   }
 }
 
@@ -352,7 +352,7 @@ export default {
 <style lang="scss">
 .nav-item {
   .nav-link {
-    color: #555 !important;
+    color: var(--bs-secondary-color) !important;
   }
 }
 </style>

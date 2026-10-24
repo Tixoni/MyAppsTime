@@ -99,7 +99,7 @@ export default {
 
 <style scoped lang="scss">
 .row.class:hover {
-  background-color: #eee;
+  background-color: var(--bs-secondary-bg);
   border-radius: 5px;
 }
 </style>

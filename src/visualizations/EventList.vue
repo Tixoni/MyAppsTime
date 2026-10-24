@@ -39,7 +39,7 @@ div
 </template>
 
 <style scoped lang="scss">
-$border-color: #ddd;
+$border-color: var(--bs-border-color);
 
 .card {
   margin-bottom: 1em;
@@ -88,7 +88,7 @@ $border-color: #ddd;
 
 .pagination-header {
   font-size: 12pt;
-  color: #666;
+  color: var(--bs-secondary-color);
   margin-bottom: 10px;
 }
 
@@ -96,9 +96,9 @@ $border-color: #ddd;
   margin: 0 5px 0 0;
   font-size: 11pt;
   padding: 3px 5px 3px 5px;
-  background-color: #ddd;
-  border: 1px solid #ccc;
-  border-radius: 2px;
+  background-color: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-sm);
 
   &:last-child {
     margin-right: 0;

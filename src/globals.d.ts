@@ -25,6 +25,5 @@ declare module '*.vue' {
 
 declare module '*.css';
 declare module '*.scss';
-declare module 'typeface-varela-round';
 declare module 'vue-datetime';
 declare module 'vue-awesome/components/Icon.vue';

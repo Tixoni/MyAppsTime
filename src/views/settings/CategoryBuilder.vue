@@ -116,7 +116,7 @@ div
 
 <style>
 .hover-highlight:hover {
-  background-color: #eee;
+  background-color: var(--bs-secondary-bg);
 }
 </style>
 

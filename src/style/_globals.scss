@@ -1,5 +1,6 @@
-$textColor: rgb(60, 66, 87);
-$backgroundColor: rgb(247, 250, 252);
+// Theme colors as CSS variables, so they follow light/dark mode (see style/bootstrap.scss)
+$textColor: var(--bs-body-color);
+$backgroundColor: var(--bs-body-bg);
 
-$lightBorderColor: darken(white, 12%);
-$activeHighlightColor: rgb(10, 120, 255);
+$lightBorderColor: var(--bs-border-color);
+$activeHighlightColor: var(--bs-primary);

@@ -3,14 +3,11 @@ import 'regenerator-runtime/runtime';
 
 import { createApp, defineAsyncComponent } from 'vue';
 
-// Load the Bootstrap CSS
+// Load Bootstrap, built with the app theme
 import { createBootstrap } from 'bootstrap-vue-next';
 import bootstrapComponents from './plugins/bootstrap';
-import 'bootstrap/dist/css/bootstrap.css';
+import './style/bootstrap.scss';
 import 'bootstrap-vue-next/dist/bootstrap-vue-next.css';
-
-// Load the Varela Round font
-import 'typeface-varela-round';
 
 // Load the main style
 import './style/style.scss';

@@ -64,7 +64,6 @@
     "regenerator-runtime": "^0.14.1",
     "sass": "^1.44.0",
     "semver": "^7.6.0",
-    "typeface-varela-round": "0.0.54",
     "vis-data": "^7.1.2",
     "vis-timeline": "^7.5.0",
     "vis-util": "^5.0.2",

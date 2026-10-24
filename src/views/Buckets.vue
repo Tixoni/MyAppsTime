@@ -185,17 +185,17 @@ div
 // No `opacity` here: opacity < 1 makes the card a stacking context, which
 // traps its dropdown menus underneath the cards below it.
 .bucket-card--unknown {
-  background: #fbfbfb;
+  background: var(--bs-tertiary-bg);
 }
 
 .bucket-row {
   display: flex;
   align-items: center;
-  border-top: 1px solid #dee2e6;
+  border-top: 1px solid var(--bs-border-color);
 }
 
 .bucket-row:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--bs-tertiary-bg);
 }
 
 .bucket-link {
@@ -230,19 +230,19 @@ div
 }
 
 ::v-deep .kebab-dropdown > .btn {
-  color: #6c757d;
+  color: var(--bs-secondary-color);
   background: transparent;
 }
 
 ::v-deep .kebab-dropdown > .btn:hover,
 ::v-deep .kebab-dropdown > .btn:focus,
 ::v-deep .kebab-dropdown.show > .btn {
-  background: #f0f1f3;
-  color: #212529;
+  background: var(--bs-secondary-bg);
+  color: var(--bs-body-color);
 }
 
 .bucket-last-updated {
-  color: #666;
+  color: var(--bs-secondary-color);
 }
 </style>
 

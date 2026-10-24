@@ -45,6 +45,8 @@ export default {
     await settingsStore.ensureLoaded();
     const theme = settingsStore.theme;
     const detectedTheme = theme === 'auto' ? detectPreferredTheme() : theme;
+    // Bootstrap's own color mode; dark.css below covers the non-Bootstrap parts
+    document.documentElement.setAttribute('data-bs-theme', detectedTheme);
 
     // Apply the dark theme if detected
     if (detectedTheme === 'dark') {

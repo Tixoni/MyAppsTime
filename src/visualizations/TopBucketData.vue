@@ -283,10 +283,10 @@ export default {
   margin-left: 0.25rem;
   width: 1.15em;
   height: 1.15em;
-  border: 1px solid #888;
+  border: 1px solid var(--bs-secondary-color);
   border-radius: 50%;
   font-size: 0.75em;
-  color: #555;
+  color: var(--bs-secondary-color);
   cursor: help;
 }
 </style>

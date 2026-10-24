@@ -25,11 +25,11 @@ div
 
 <style scoped lang="scss">
 .stopwatch-entry {
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--bs-border-color);
 }
 
 .stopwatch-entry:hover {
-  background-color: #f8f9fa;
+  background-color: var(--bs-tertiary-bg);
 }
 
 .stopwatch-entry__actions {

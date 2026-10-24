@@ -475,9 +475,9 @@ export default {
 .timeline-chip {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #dee2e6;
-  border-radius: 0.25rem;
-  background: #fff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background: var(--aw-surface);
   padding: 0.375rem 0.625rem;
   font-size: 0.875rem;
   line-height: 1.25;
@@ -489,7 +489,7 @@ export default {
 }
 
 .timeline-chip--clickable:hover {
-  background: #f8f9fa;
+  background: var(--bs-secondary-bg);
 }
 
 .timeline-filters {
@@ -509,9 +509,9 @@ export default {
   position: absolute;
   left: 0;
   top: calc(100% + 4px);
-  background: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 0.375rem;
+  background: var(--aw-surface);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
   padding: 0.75rem 1rem;
   z-index: 100;
   min-width: 320px;

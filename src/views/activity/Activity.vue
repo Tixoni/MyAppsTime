@@ -245,7 +245,8 @@ div
 @import '../../style/globals';
 
 .activity-options-row {
-  background-color: #eee;
+  background-color: var(--bs-secondary-bg);
+  border-radius: var(--bs-border-radius-lg);
 }
 
 .activity-toolbar {
@@ -283,23 +284,21 @@ div
       // default bootstrap vertical padding was too high
       padding: 0.25rem 1rem;
 
-      color: lighten(black, 40%);
+      color: var(--bs-secondary-color);
       cursor: pointer;
       border: none;
 
       &:hover {
-        color: black !important;
-        border-bottom: 3px solid lighten(black, 70%);
+        color: var(--bs-body-color) !important;
+        border-bottom: 2px solid var(--bs-border-color);
         border-radius: 0;
       }
 
       &.router-link-exact-active {
-        color: $activeHighlightColor !important;
-        border-bottom: 3px solid lighten($activeHighlightColor, 15%);
+        color: var(--bs-body-color) !important;
+        border-bottom: 2px solid $activeHighlightColor;
         border-radius: 0;
-
-        // Does nothing for Verala Round
-        font-weight: bold;
+        font-weight: 600;
       }
     }
   }

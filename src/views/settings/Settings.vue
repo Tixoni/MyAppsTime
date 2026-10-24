@@ -174,20 +174,20 @@ export default {
 }
 
 ::v-deep .settings-nav .nav-link {
-  color: #495057;
-  border-radius: 0.25rem;
+  color: var(--bs-secondary-color);
+  border-radius: var(--bs-border-radius);
   padding: 0.5rem 0.75rem;
   margin-bottom: 0.125rem;
 }
 
 ::v-deep .settings-nav .nav-link:hover {
-  background-color: #f0f1f3;
+  background-color: var(--bs-tertiary-bg);
 }
 
 ::v-deep .settings-nav .nav-link.active,
 ::v-deep .settings-nav .nav-link.active:hover {
-  background-color: #495057 !important;
-  color: #fff !important;
+  background-color: var(--bs-secondary-bg) !important;
+  color: var(--bs-emphasis-color) !important;
 }
 
 .settings-content {

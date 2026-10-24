@@ -1,0 +1,98 @@
+// Bootstrap, themed after the Claude app: warm ivory / graphite surfaces and a
+// terracotta accent. Light and dark come from Bootstrap's own color modes
+// (data-bs-theme on <html>, set in App.vue and Theme.vue).
+
+// Accent. #C15F3C keeps white button text at 5.3:1; links use a darker shade
+// in light mode (5.2:1 on ivory) and the lighter #D97757 in dark mode (4.9:1).
+$primary: #c15f3c;
+$link-color: #a4502f;
+$link-hover-color: #8a4128;
+$link-color-dark: #d97757;
+$link-hover-color-dark: #e6977b;
+
+$light: #f5f4ed;
+$dark: #30302e;
+
+// Light mode
+$body-bg: #faf9f5;
+$body-color: #141413;
+$body-emphasis-color: #000;
+$body-secondary-color: #6b6a65;
+$body-secondary-bg: #f0eee6;
+$body-tertiary-bg: #f5f4ed;
+$border-color: #e0ded6;
+
+// Dark mode
+$body-bg-dark: #262624;
+$body-color-dark: #f0eee6;
+$body-emphasis-color-dark: #fff;
+$body-secondary-color-dark: #a3a199;
+$body-secondary-bg-dark: #3a3a37;
+$body-tertiary-bg-dark: #2b2b29;
+$border-color-dark: #45443f;
+
+// Type: system sans for the UI, a serif for headings like the Claude app
+$font-family-sans-serif: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, Roboto,
+  'Helvetica Neue', Arial, sans-serif;
+$headings-font-family: ui-serif, Georgia, Cambria, 'Times New Roman', serif;
+$headings-font-weight: 500;
+$btn-font-weight: 500;
+
+// Soft, rounded surfaces
+$border-radius: 0.5rem;
+$border-radius-sm: 0.375rem;
+$border-radius-lg: 0.75rem;
+$card-bg: var(--aw-surface);
+$dropdown-bg: var(--aw-surface);
+$modal-content-bg: var(--aw-surface);
+$popover-bg: var(--aw-surface);
+$offcanvas-bg-color: var(--aw-surface);
+$input-bg: var(--aw-surface);
+$list-group-bg: transparent;
+$dropdown-link-active-bg: $primary;
+$nav-pills-link-active-bg: $primary;
+
+@import 'bootstrap/scss/bootstrap';
+
+.navbar-brand {
+  font-family: $headings-font-family;
+}
+
+// Raised surfaces (cards, menus, dialogs, inputs) sit one step off the page
+:root,
+[data-bs-theme='light'] {
+  --aw-surface: #fff;
+}
+
+[data-bs-theme='dark'] {
+  --aw-surface: #30302e;
+
+  // Bootstrap's .bg-light and outline-primary don't follow the color mode
+  .bg-light {
+    background-color: var(--bs-tertiary-bg) !important;
+  }
+
+  .btn-outline-primary {
+    --bs-btn-color: #d97757;
+    --bs-btn-border-color: #d97757;
+  }
+}
+
+// Neutral buttons (period pickers, toolbars, kebab menus) as quiet outlines that
+// work in both modes; the selected one gets an accent tint.
+.btn-outline-dark,
+.btn-outline-secondary,
+.btn-light {
+  --bs-btn-color: var(--bs-body-color);
+  --bs-btn-bg: transparent;
+  --bs-btn-border-color: var(--bs-border-color);
+  --bs-btn-hover-color: var(--bs-body-color);
+  --bs-btn-hover-bg: var(--bs-secondary-bg);
+  --bs-btn-hover-border-color: var(--bs-border-color);
+  --bs-btn-active-color: var(--bs-primary-text-emphasis);
+  --bs-btn-active-bg: var(--bs-primary-bg-subtle);
+  --bs-btn-active-border-color: var(--bs-primary-border-subtle);
+  --bs-btn-disabled-color: var(--bs-secondary-color);
+  --bs-btn-disabled-bg: transparent;
+  --bs-btn-disabled-border-color: var(--bs-border-color);
+}

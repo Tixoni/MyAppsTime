@@ -1,12 +1,12 @@
 <template lang="pug">
-div.container(style="color: #555; font-size: 0.9em")
+div.container.text-body-secondary(style="font-size: 0.9em")
   div.mb-2
     | {{ $t('footer.madeWith') }}
     a(href="https://activitywatch.net/donate/", target="_blank" rel="noopener noreferrer")
-      icon(name="heart" scale=0.75 style="color: #E55")
+      icon(name="heart" scale=0.75 style="color: var(--bs-primary)")
     | {{ $t('footer.byDevs') }}
     div
-      span.mt-2(v-if="info", style="color: #888; font-size: 0.8em")
+      span.mt-2.text-body-secondary(v-if="info", style="font-size: 0.8em")
         span.me-2
           b {{ $t('footer.host') }}
           | &nbsp; {{info.hostname}}

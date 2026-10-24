@@ -105,6 +105,12 @@ export default defineConfig(({ mode }) => {
       //  'Content-Security-Policy': PRODUCTION ? "default-src 'self'" : "default-src 'self' *:5666",
       //},
     },
+    css: {
+      preprocessorOptions: {
+        // Bootstrap 5.3's SCSS (style/bootstrap.scss) still uses these deprecated Sass features
+        scss: { silenceDeprecations: ['import', 'global-builtin', 'color-functions', 'if-function'] },
+      },
+    },
     publicDir: './static',
     resolve: {
       alias: { '~': path.resolve(__dirname, 'src') },
